@@ -1,0 +1,240 @@
+// LaBorregaMarket — Esquema de catálogos y módulos
+// PostgreSQL + Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  CLIENT    // Cliente: busca fruterías, contacta, hace pedidos
+  PROVIDER  // Proveedor: gestiona su negocio y productos disponibles
+  ADMIN     // Administrador: acceso total a catálogos, permisos y bitácora
+}
+
+enum ProductCategory {
+  FRUTA
+  VERDURA
+  AGRICOLA
+}
+
+enum ProductUnit {
+  KG
+  PIEZA
+  MANOJO
+  CAJA
+  LITRO
+  GRAMO
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ENABLE
+  DISABLE
+  VIEW
+}
+
+enum SystemModule {
+  USERS
+  PROVIDERS
+  PRODUCTS
+  ORDERS
+  PERMISSIONS
+  AUTH
+  AUDIT
+}
+
+// ─── USUARIOS ────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  phone        String?
+  role         UserRole @default(CLIENT)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  provider     Provider?
+  orders       Order[]   @relation("ClientOrders")
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+// ─── PROVEEDORES (Fruterías / negocios) ─────────────────────────────────────
+
+model Provider {
+  id           String   @id @default(cuid())
+  userId       String   @unique @map("user_id")
+  businessName String   @map("business_name")
+  description  String?
+  address      String
+  city         String   @default("Monterrey")
+  state        String   @default("Nuevo León")
+  latitude     Float
+  longitude    Float
+  phone        String
+  logoUrl      String?  @map("logo_url")
+  coverUrl     String?  @map("cover_url")
+  rating       Float    @default(0)
+  reviewCount  Int      @default(0) @map("review_count")
+  isActive     Boolean  @default(true) @map("is_active")
+  isVerified   Boolean  @default(false) @map("is_verified")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerProducts ProviderProduct[]
+  orders           Order[]
+
+  @@map("providers")
+}
+
+// ─── CATÁLOGO GLOBAL DE PRODUCTOS (solo frutas, verduras, agrícolas) ─────────
+
+model Product {
+  id          String          @id @default(cuid())
+  name        String
+  slug        String          @unique
+  description String?
+  category    ProductCategory
+  unit        ProductUnit     @default(KG)
+  imageUrl    String?         @map("image_url")
+  isActive    Boolean         @default(true) @map("is_active")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  providerProducts ProviderProduct[]
+  orderItems       OrderItem[]
+
+  @@map("products")
+}
+
+// ─── PRODUCTOS POR PROVEEDOR (precio + activar/inactivar) ────────────────────
+
+model ProviderProduct {
+  id          String   @id @default(cuid())
+  providerId  String   @map("provider_id")
+  productId   String   @map("product_id")
+  price       Decimal  @db.Decimal(10, 2)
+  isAvailable Boolean  @default(true) @map("is_available")
+  stock       Int?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  provider   Provider    @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@unique([providerId, productId])
+  @@map("provider_products")
+}
+
+// ─── PEDIDOS ─────────────────────────────────────────────────────────────────
+
+model Order {
+  id         String      @id @default(cuid())
+  clientId   String      @map("client_id")
+  providerId String      @map("provider_id")
+  status     OrderStatus @default(PENDING)
+  total      Decimal     @db.Decimal(10, 2) @default(0)
+  notes      String?
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  client   User        @relation("ClientOrders", fields: [clientId], references: [id])
+  provider Provider    @relation(fields: [providerId], references: [id])
+  items    OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id                String  @id @default(cuid())
+  orderId           String  @map("order_id")
+  productId         String  @map("product_id")
+  providerProductId String  @map("provider_product_id")
+  quantity          Decimal @db.Decimal(10, 2)
+  unitPrice         Decimal @db.Decimal(10, 2) @map("unit_price")
+  subtotal          Decimal @db.Decimal(10, 2)
+
+  order           Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         Product         @relation(fields: [productId], references: [id])
+  providerProduct ProviderProduct @relation(fields: [providerProductId], references: [id])
+
+  @@map("order_items")
+}
+
+// ─── MÓDULOS DEL SISTEMA (catálogo admin) ────────────────────────────────────
+
+model Module {
+  id          String       @id @default(cuid())
+  code        SystemModule @unique
+  name        String
+  description String?
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  permissions RolePermission[]
+
+  @@map("modules")
+}
+
+// ─── PERMISOS POR ROL (solo visible/gestionable por ADMIN) ───────────────────
+
+model RolePermission {
+  id        String   @id @default(cuid())
+  role      UserRole
+  moduleId  String   @map("module_id")
+  canView   Boolean  @default(false) @map("can_view")
+  canCreate Boolean  @default(false) @map("can_create")
+  canEdit   Boolean  @default(false) @map("can_edit")
+  canDelete Boolean  @default(false) @map("can_delete")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([role, moduleId])
+  @@map("role_permissions")
+}
+
+// ─── BITÁCORA / AUDITORÍA (registro por módulo) ──────────────────────────────
+
+model AuditLog {
+  id        String       @id @default(cuid())
+  module    SystemModule
+  action    AuditAction
+  entityId  String?      @map("entity_id")
+  userId    String?      @map("user_id")
+  details   Json?
+  ipAddress String?      @map("ip_address")
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([module, createdAt])
+  @@index([userId])
+  @@map("audit_logs")
+}
