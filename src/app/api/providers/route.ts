@@ -1,60 +1,97 @@
-import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { NextRequest } from "next/server";
+import { UserRole, ProductCategory } from "@prisma/client";
+import { getSession, requireRole, AuthError } from "@/lib/auth/session";
+import { ok, paginated, apiError, handleRouteError } from "@/lib/api/response";
+import { parsePaginationParams } from "@/lib/services/pagination";
+import {
+  createProvider,
+  createProviderSchema,
+  listProviders,
+  ProviderConflictError,
+} from "@/lib/services/provider.service";
+
+const CATEGORIES = new Set<string>(Object.values(ProductCategory));
 
 /** API pública: listar fruterías para la vista tipo Airbnb */
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const city = searchParams.get("city");
-  const q = searchParams.get("q");
+  try {
+    const { searchParams } = new URL(request.url);
+    const { page, limit, skip } = parsePaginationParams(searchParams, {
+      defaultLimit: 20,
+      maxLimit: 50,
+    });
 
-  const providers = await prisma.provider.findMany({
-    where: {
-      isActive: true,
-      ...(city ? { city: { contains: city, mode: "insensitive" } } : {}),
-      ...(q
-        ? {
-            OR: [
-              { businessName: { contains: q, mode: "insensitive" } },
-              { description: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    include: {
-      providerProducts: {
-        where: { isAvailable: true },
-        include: { product: true },
-        take: 5,
+    const q = searchParams.get("q");
+    if (q !== null && q.length > 0 && q.length < 2) {
+      return apiError("Validation failed", 400, [
+        { field: "q", message: "Mínimo 2 caracteres" },
+      ]);
+    }
+
+    const categoryParam = searchParams.get("category");
+    if (categoryParam !== null && categoryParam !== "" && !CATEGORIES.has(categoryParam)) {
+      return apiError("Validation failed", 400, [
+        { field: "category", message: "Debe ser FRUTA, VERDURA o AGRICOLA" },
+      ]);
+    }
+
+    const verifiedParam = searchParams.get("verified");
+    const verified = verifiedParam === "true";
+
+    const result = await listProviders(
+      {
+        city: searchParams.get("city"),
+        q: q && q.length >= 2 ? q : null,
+        verified,
+        category: categoryParam
+          ? (categoryParam as "FRUTA" | "VERDURA" | "AGRICOLA")
+          : null,
       },
-      _count: { select: { providerProducts: { where: { isAvailable: true } } } },
-    },
-    orderBy: { rating: "desc" },
-  });
+      { page, limit, skip }
+    );
 
-  const mapped = providers.map((p) => ({
-    id: p.id,
-    businessName: p.businessName,
-    description: p.description,
-    address: p.address,
-    city: p.city,
-    latitude: p.latitude,
-    longitude: p.longitude,
-    phone: p.phone,
-    logoUrl: p.logoUrl,
-    coverUrl: p.coverUrl,
-    rating: p.rating,
-    reviewCount: p.reviewCount,
-    isVerified: p.isVerified,
-    productCount: p._count.providerProducts,
-    sampleProducts: p.providerProducts.map((pp) => ({
-      name: pp.product.name,
-      price: Number(pp.price),
-      unit: pp.product.unit,
-    })),
-    minPrice: p.providerProducts.length
-      ? Math.min(...p.providerProducts.map((pp) => Number(pp.price)))
-      : null,
-  }));
+    return paginated(result.data, result.meta);
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return apiError(err.message, err.status);
+    }
+    return handleRouteError(err);
+  }
+}
 
-  return NextResponse.json({ providers: mapped, total: mapped.length });
+/** Onboarding proveedor paso 2 — crear entidad Provider */
+export async function POST(request: NextRequest) {
+  try {
+    const session = requireRole(getSession(request), UserRole.PROVIDER);
+    const body = createProviderSchema.parse(await request.json());
+
+    const provider = await createProvider(
+      session.sub,
+      body,
+      request.headers.get("x-forwarded-for") ?? undefined
+    );
+
+    return ok(
+      {
+        id: provider.id,
+        businessName: provider.businessName,
+        address: provider.address,
+        city: provider.city,
+        latitude: provider.latitude,
+        longitude: provider.longitude,
+        phone: provider.phone,
+        isVerified: provider.isVerified,
+        isActive: provider.isActive,
+      },
+      201
+    );
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return apiError(err.message, err.status);
+    }
+    if (err instanceof ProviderConflictError) {
+      return apiError(err.message, 409);
+    }
+    return handleRouteError(err);
+  }
 }

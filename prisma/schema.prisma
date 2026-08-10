@@ -50,6 +50,8 @@ enum AuditAction {
   ENABLE
   DISABLE
   VIEW
+  CONTACT
+  MEDIA_UPLOAD
 }
 
 enum SystemModule {
@@ -108,6 +110,9 @@ model Provider {
   providerProducts ProviderProduct[]
   orders           Order[]
 
+  @@index([city])
+  @@index([businessName])
+  @@index([isActive, isVerified])
   @@map("providers")
 }
 

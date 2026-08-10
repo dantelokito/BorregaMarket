@@ -1,0 +1,3 @@
+﻿-- AlterEnum
+ALTER TYPE "AuditAction" ADD VALUE 'CONTACT';
+ALTER TYPE "AuditAction" ADD VALUE 'MEDIA_UPLOAD';

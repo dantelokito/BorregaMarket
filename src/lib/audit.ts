@@ -1,4 +1,4 @@
-import { SystemModule, AuditAction } from "@prisma/client";
+import { SystemModule, AuditAction, Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 
 interface AuditEntry {
@@ -17,7 +17,7 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
       action: entry.action,
       entityId: entry.entityId,
       userId: entry.userId,
-      details: entry.details ?? undefined,
+      details: entry.details as Prisma.InputJsonValue | undefined,
       ipAddress: entry.ipAddress,
     },
   });
