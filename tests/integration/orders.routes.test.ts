@@ -6,6 +6,7 @@ import { AuthError } from "@/lib/auth/session";
 const getSession = vi.fn();
 const createMarketplaceOrder = vi.fn();
 const listClientOrders = vi.fn();
+const getOrderById = vi.fn();
 const createPosSale = vi.fn();
 const getProviderDashboard = vi.fn();
 
@@ -22,6 +23,7 @@ vi.mock("@/lib/auth/session", async () => {
 vi.mock("@/lib/services/order.service", () => ({
   createMarketplaceOrder: (...args: unknown[]) => createMarketplaceOrder(...args),
   listClientOrders: (...args: unknown[]) => listClientOrders(...args),
+  getOrderById: (...args: unknown[]) => getOrderById(...args),
 }));
 
 vi.mock("@/lib/services/pos.service", () => ({
@@ -36,17 +38,8 @@ vi.mock("@/lib/email/resend", () => ({
   sendNewOrderEmail: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
-vi.mock("next/server", async () => {
-  const actual = await vi.importActual<typeof import("next/server")>("next/server");
-  return {
-    ...actual,
-    after: (fn: () => unknown) => {
-      void fn();
-    },
-  };
-});
-
 import { GET as getOrders, POST as postOrders } from "@/app/api/orders/route";
+import { GET as getOrder } from "@/app/api/orders/[id]/route";
 import { POST as postPos } from "@/app/api/provider/pos/sales/route";
 import { GET as getDash } from "@/app/api/provider/dashboard/route";
 
@@ -117,7 +110,6 @@ describe("orders routes", () => {
     createMarketplaceOrder.mockResolvedValue({
       replay: false,
       order: { id: "ord1", total: "85.50", status: "PENDING" },
-      emailJob: null,
     });
     const res = await postOrders(
       jsonRequest("/api/orders", {
@@ -133,6 +125,97 @@ describe("orders routes", () => {
     const body = await res.json();
     expect(body.data.id).toBe("ord1");
     expect(body.data.total).toBe("85.50");
+  });
+
+  it("returns 400 when DELIVERY has no deliveryAddressId", async () => {
+    getSession.mockReturnValue({
+      sub: "u1",
+      email: "c@test.com",
+      role: UserRole.CLIENT,
+      name: "María",
+    });
+    const res = await postOrders(
+      jsonRequest("/api/orders", {
+        method: "POST",
+        headers: { "Idempotency-Key": "11111111-1111-4111-8111-111111111111" },
+        body: {
+          providerId: "prov1",
+          fulfillmentType: "DELIVERY",
+          items: [{ providerProductId: "pp1", quantity: "1" }],
+        },
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(createMarketplaceOrder).not.toHaveBeenCalled();
+  });
+
+  it("returns fulfillment extra fields on 201", async () => {
+    getSession.mockReturnValue({
+      sub: "u1",
+      email: "c@test.com",
+      role: UserRole.CLIENT,
+      name: "María",
+    });
+    createMarketplaceOrder.mockResolvedValue({
+      replay: false,
+      order: {
+        id: "ord2",
+        status: "PENDING",
+        source: "MARKETPLACE",
+        fulfillmentType: "DELIVERY",
+        etaMinutes: 35,
+        deliveryAddressSnapshot: {
+          label: "Casa",
+          formattedAddress: "Av. Juárez 123",
+          lat: 25.67,
+          lng: -100.31,
+        },
+      },
+    });
+    const res = await postOrders(
+      jsonRequest("/api/orders", {
+        method: "POST",
+        headers: { "Idempotency-Key": "11111111-1111-4111-8111-111111111111" },
+        body: {
+          providerId: "prov1",
+          fulfillmentType: "DELIVERY",
+          deliveryAddressId: "addr1",
+          items: [{ providerProductId: "pp1", quantity: "1" }],
+        },
+      })
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.data.fulfillmentType).toBe("DELIVERY");
+    expect(body.data.etaMinutes).toBe(35);
+  });
+
+  it("GET detalle returns fulfillment extras", async () => {
+    getSession.mockReturnValue({
+      sub: "u1",
+      email: "c@test.com",
+      role: UserRole.CLIENT,
+      name: "María",
+    });
+    getOrderById.mockResolvedValue({
+      id: "ord2",
+      fulfillmentType: "DELIVERY",
+      etaMinutes: 35,
+      deliveryAddressSnapshot: {
+        label: "Casa",
+        formattedAddress: "Av. Juárez 123",
+        lat: 25.67,
+        lng: -100.31,
+      },
+    });
+    const res = await getOrder(jsonRequest("/api/orders/ord2"), {
+      params: Promise.resolve({ id: "ord2" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.fulfillmentType).toBe("DELIVERY");
+    expect(body.data.etaMinutes).toBe(35);
+    expect(body.data.deliveryAddressSnapshot.label).toBe("Casa");
   });
 });
 

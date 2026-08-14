@@ -1,8 +1,8 @@
 # LaBorregaMarket — Product Overview
 
-> **Versión del producto:** 0.2.0 (Fase 2 implementada; Fase 3 en discovery)  
-> **Última actualización:** 12/08/2026  
-> **Estado:** Pre-lanzamiento — F2 en cierre operativo; F3 pedidos/POS documentada  
+> **Versión del producto:** 0.4.0 (Fase 4 — reviews, geo, notify, analytics)  
+> **Última actualización:** 14/08/2026  
+> **Estado:** Pre-lanzamiento — F3+F4 implementadas en código; staging pendiente  
 > **Licencia:** Privado — LaBorregaMarket © 2026
 
 ---

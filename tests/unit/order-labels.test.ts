@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { ORDER_STATUS_LABEL, shortOrderId, toUnitOfMeasure } from "@/lib/orders/labels";
+import { ORDER_STATUS_LABEL, inTransitLabel, shortOrderId, toUnitOfMeasure } from "@/lib/orders/labels";
 
 describe("order labels", () => {
   it("maps IN_TRANSIT to Listo para recoger", () => {
     expect(ORDER_STATUS_LABEL.IN_TRANSIT).toBe("Listo para recoger");
     expect(ORDER_STATUS_LABEL.IN_TRANSIT).not.toContain("camino");
+  });
+
+  it("uses En camino only for DELIVERY helper", () => {
+    expect(inTransitLabel("DELIVERY")).toBe("En camino");
+    expect(inTransitLabel("PICKUP")).toBe("Listo para recoger");
   });
 
   it("maps catalog units to PZA/KG/GR", () => {
