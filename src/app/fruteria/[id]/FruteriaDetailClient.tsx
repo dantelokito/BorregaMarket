@@ -11,6 +11,7 @@ import { ProviderHero } from "@/components/fruteria/ProviderHero";
 import { ProductTable } from "@/components/fruteria/ProductTable";
 import { MiniMap } from "@/components/fruteria/MiniMap";
 import { ContactCTA } from "@/components/fruteria/ContactCTA";
+import { ReviewList } from "@/components/reviews/ReviewList";
 import { SkeletonTable } from "@/components/ui/SkeletonCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -211,6 +212,12 @@ export function FruteriaDetailClient() {
           onQuantityChange={handleQuantityChange}
         />
       </section>
+
+      <ReviewList
+        providerId={provider.id}
+        googleEnabled={provider.googleReviews?.enabled}
+        googleMapsUrl={provider.googleReviews?.mapsUrl}
+      />
 
       {hasItems && (
         <div className="mt-4 hidden rounded-xl border border-gray-200 bg-white px-4 py-3 lg:flex lg:items-center lg:justify-between">

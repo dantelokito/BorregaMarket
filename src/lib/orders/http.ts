@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { AuthError } from "@/lib/auth/session";
 import { apiError, handleRouteError } from "@/lib/api/response";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+import { AddressNotFoundError } from "@/lib/services/address.service";
 import {
   InvalidTransitionError,
   OrderForbiddenError,
@@ -31,6 +32,9 @@ export function handleOrderRouteError(err: unknown): NextResponse {
   }
   if (err instanceof OrderValidationError) {
     return apiError(err.message, 400, err.details);
+  }
+  if (err instanceof AddressNotFoundError) {
+    return apiError(err.message, 404);
   }
   if (err instanceof SyntaxError) {
     return apiError("Validation failed", 400, [

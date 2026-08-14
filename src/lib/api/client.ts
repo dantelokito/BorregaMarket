@@ -73,6 +73,15 @@ export async function apiPatch<T>(
   return parseResponse<T>(res);
 }
 
+export async function apiDelete<T>(url: string, options?: ApiRequestOptions): Promise<ApiResult<T>> {
+  const res = await fetch(url, {
+    method: "DELETE",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+  });
+  return parseResponse<T>(res);
+}
+
 /** Multipart upload (do not set Content-Type — browser sets boundary) */
 export async function apiPostForm<T>(url: string, form: FormData): Promise<ApiResult<T>> {
   const res = await fetch(url, {

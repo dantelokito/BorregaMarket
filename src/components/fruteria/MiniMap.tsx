@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { Map, useMap } from "@vis.gl/react-google-maps";
+import { getGoogleMapsApiKey } from "@/lib/maps/constants";
+import { GoogleMapsProvider } from "@/components/maps/GoogleMapsProvider";
 
 interface MiniMapProps {
   latitude: number;
@@ -10,80 +13,76 @@ interface MiniMapProps {
   interactive?: boolean;
 }
 
-export function MiniMap({
+function MiniMapInner({
   latitude,
   longitude,
   businessName,
   onLocationChange,
   interactive = false,
 }: MiniMapProps) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
-  const markerRef = useRef<L.Marker | null>(null);
+  const map = useMap();
+  const markerRef = useRef<google.maps.Marker | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !mapRef.current) return;
+    if (!map) return;
+    const position = { lat: latitude, lng: longitude };
 
-    let cancelled = false;
-
-    async function initMap() {
-      const L = (await import("leaflet")).default;
-
-      if (cancelled || !mapRef.current) return;
-
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-
-      const map = L.map(mapRef.current, {
-        zoomControl: true,
-        dragging: interactive,
-        scrollWheelZoom: interactive,
-      }).setView([latitude, longitude], 14);
-
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
-      }).addTo(map);
-
-      const marker = L.marker([latitude, longitude]).addTo(map);
-      if (businessName) {
-        marker.bindPopup(businessName);
-      }
-
+    if (!markerRef.current) {
+      markerRef.current = new google.maps.Marker({
+        map,
+        position,
+        title: businessName,
+        draggable: interactive,
+      });
       if (interactive && onLocationChange) {
-        map.on("click", (e: L.LeafletMouseEvent) => {
-          const { lat, lng } = e.latlng;
-          marker.setLatLng([lat, lng]);
-          onLocationChange(lat, lng);
+        markerRef.current.addListener("dragend", () => {
+          const pos = markerRef.current?.getPosition();
+          if (pos) onLocationChange(pos.lat(), pos.lng());
+        });
+        map.addListener("click", (e: google.maps.MapMouseEvent) => {
+          if (!e.latLng) return;
+          markerRef.current?.setPosition(e.latLng);
+          onLocationChange(e.latLng.lat(), e.latLng.lng());
         });
       }
-
-      mapInstanceRef.current = map;
-      markerRef.current = marker;
+    } else {
+      markerRef.current.setPosition(position);
     }
+    map.panTo(position);
+  }, [map, latitude, longitude, businessName, interactive, onLocationChange]);
 
-    initMap();
+  return null;
+}
 
-    return () => {
-      cancelled = true;
-      mapInstanceRef.current?.remove();
-      mapInstanceRef.current = null;
-      markerRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+export function MiniMap(props: MiniMapProps) {
+  const apiKey = getGoogleMapsApiKey();
 
-  useEffect(() => {
-    if (markerRef.current && mapInstanceRef.current) {
-      markerRef.current.setLatLng([latitude, longitude]);
-      mapInstanceRef.current.setView([latitude, longitude]);
-    }
-  }, [latitude, longitude]);
+  if (!apiKey) {
+    return (
+      <div
+        className="flex h-48 w-full items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-slate-50 text-sm text-slate-500 lg:h-64"
+        role="status"
+      >
+        Mapa no disponible
+      </div>
+    );
+  }
 
   return (
-    <div className="relative h-48 w-full overflow-hidden rounded-xl border border-gray-200 lg:h-64">
-      <div ref={mapRef} className="absolute inset-0" />
-    </div>
+    <GoogleMapsProvider>
+      <div className="relative h-48 w-full overflow-hidden rounded-xl border border-gray-200 lg:h-64">
+        <Map
+          className="absolute inset-0 h-full w-full"
+          defaultCenter={{ lat: props.latitude, lng: props.longitude }}
+          defaultZoom={14}
+          gestureHandling={props.interactive ? "greedy" : "none"}
+          disableDefaultUI={!props.interactive}
+          reuseMaps
+          mapId="DEMO_MAP_ID"
+        >
+          <MiniMapInner {...props} />
+        </Map>
+      </div>
+    </GoogleMapsProvider>
   );
 }

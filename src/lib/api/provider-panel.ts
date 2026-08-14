@@ -5,6 +5,18 @@ export async function getMyBusiness() {
   return apiGet<ProviderBusiness>("/api/provider/me");
 }
 
+export interface PatchProviderSettingsInput {
+  preparationTimeMinutes?: number;
+  offersDelivery?: boolean;
+  googlePlaceId?: string | null;
+  googleMapsUrl?: string | null;
+  googleReviewsEnabled?: boolean;
+}
+
+export async function updateProviderSettings(input: PatchProviderSettingsInput) {
+  return apiPatch<ProviderBusiness>("/api/provider/me", input);
+}
+
 export async function getMyProducts() {
   return apiGet<ProviderProductsResponse>("/api/provider/products");
 }

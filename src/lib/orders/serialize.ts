@@ -1,4 +1,5 @@
 import {
+  FulfillmentType,
   OrderSource,
   OrderStatus,
   PaymentMethod,
@@ -6,6 +7,13 @@ import {
   UnitOfMeasure,
 } from "@prisma/client";
 import { formatMoney, formatQuantity } from "@/lib/money";
+
+export type DeliveryAddressSnapshot = {
+  label: string;
+  formattedAddress: string;
+  lat: number;
+  lng: number;
+};
 
 export type OrderItemRecord = {
   id: string;
@@ -30,10 +38,34 @@ export type OrderRecord = {
   notes: string | null;
   total: Prisma.Decimal;
   createdAt: Date;
+  fulfillmentType: FulfillmentType;
+  etaMinutes: number | null;
+  deliveryAddressSnapshot: DeliveryAddressSnapshot | Prisma.JsonValue | null;
   items: OrderItemRecord[];
   provider: { id: string; businessName: string; userId: string };
   client: { id: string; name: string; phone: string | null } | null;
 };
+
+function snapshotOf(
+  value: OrderRecord["deliveryAddressSnapshot"]
+): DeliveryAddressSnapshot | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const snap = value as Record<string, unknown>;
+  if (
+    typeof snap.label !== "string" ||
+    typeof snap.formattedAddress !== "string" ||
+    typeof snap.lat !== "number" ||
+    typeof snap.lng !== "number"
+  ) {
+    return null;
+  }
+  return {
+    label: snap.label,
+    formattedAddress: snap.formattedAddress,
+    lat: snap.lat,
+    lng: snap.lng,
+  };
+}
 
 export function serializeOrderItem(item: OrderItemRecord) {
   return {
@@ -66,6 +98,9 @@ export function serializeOrder(
     total: formatMoney(order.total),
     items: order.items.map(serializeOrderItem),
     createdAt: order.createdAt.toISOString(),
+    fulfillmentType: order.fulfillmentType,
+    etaMinutes: order.etaMinutes,
+    deliveryAddressSnapshot: snapshotOf(order.deliveryAddressSnapshot),
   };
 
   if (options.includeClient) {
@@ -100,6 +135,9 @@ export function serializeClientOrderSummary(order: OrderRecord) {
       subtotal: formatMoney(item.subtotal),
     })),
     createdAt: order.createdAt.toISOString(),
+    fulfillmentType: order.fulfillmentType,
+    etaMinutes: order.etaMinutes,
+    deliveryAddressSnapshot: snapshotOf(order.deliveryAddressSnapshot),
   };
 }
 
@@ -120,6 +158,8 @@ export function serializeProviderOrderRow(order: OrderRecord) {
       : null,
     notes: order.notes,
     createdAt: order.createdAt.toISOString(),
+    fulfillmentType: order.fulfillmentType,
+    etaMinutes: order.etaMinutes,
   };
 }
 

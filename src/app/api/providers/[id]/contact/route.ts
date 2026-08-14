@@ -1,13 +1,12 @@
 import { NextRequest } from "next/server";
-import { after } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getSession } from "@/lib/auth/session";
 import { ok, apiError, handleRouteError } from "@/lib/api/response";
 import { contactBodySchema } from "@/lib/validators/contact";
 import {
   registerContact,
-  runContactEmailJob,
   ContactRateLimitError,
+  ContactRedisUnavailableError,
 } from "@/lib/services/contact.service";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
 
@@ -41,13 +40,6 @@ export async function POST(
       sessionId: session?.sub ?? null,
     });
 
-    if (result.emailJob) {
-      const job = result.emailJob;
-      after(async () => {
-        await runContactEmailJob(job);
-      });
-    }
-
     return ok({
       notified: result.notified,
       message: result.message,
@@ -55,6 +47,9 @@ export async function POST(
   } catch (err) {
     if (err instanceof ContactRateLimitError) {
       return apiError(err.message, 429);
+    }
+    if (err instanceof ContactRedisUnavailableError) {
+      return apiError(err.message, 503);
     }
     if (err instanceof ProviderNotFoundError) {
       return apiError(err.message, 404);

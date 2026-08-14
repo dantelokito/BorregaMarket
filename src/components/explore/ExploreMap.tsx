@@ -1,89 +1,164 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { ProviderListing } from "@/types";
+import { Map, useMap } from "@vis.gl/react-google-maps";
+import type { ProviderListing } from "@/lib/api/types";
+import { MONTERREY_CENTER, getGoogleMapsApiKey } from "@/lib/maps/constants";
+import { GoogleMapsProvider } from "@/components/maps/GoogleMapsProvider";
 
 interface ExploreMapProps {
   providers: ProviderListing[];
   hoveredId: string | null;
   onMarkerHover: (id: string) => void;
   onMarkerLeave: () => void;
+  pin?: { lat: number; lng: number } | null;
+  radiusKm?: number;
+  onPinChange?: (lat: number, lng: number) => void;
 }
 
-export function ExploreMap({ providers, hoveredId, onMarkerHover, onMarkerLeave }: ExploreMapProps) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
-  const markersRef = useRef<L.Marker[]>([]);
+function MapOverlays({
+  providers,
+  hoveredId,
+  onMarkerHover,
+  onMarkerLeave,
+  pin,
+  radiusKm = 10,
+  onPinChange,
+}: ExploreMapProps) {
+  const map = useMap();
+  const circleRef = useRef<google.maps.Circle | null>(null);
+  const markersRef = useRef<google.maps.Marker[]>([]);
+  const userMarkerRef = useRef<google.maps.Marker | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !mapRef.current) return;
+    if (!map) return;
 
-    let cancelled = false;
-
-    async function initMap() {
-      const L = (await import("leaflet")).default;
-
-      if (cancelled || !mapRef.current || mapInstanceRef.current) return;
-
-      const center: [number, number] = [25.6714, -100.35];
-      const map = L.map(mapRef.current, { zoomControl: true }).setView(center, 12);
-
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
-      }).addTo(map);
-
-      mapInstanceRef.current = map;
-      updateMarkers(L, map);
+    if (pin) {
+      if (!circleRef.current) {
+        circleRef.current = new google.maps.Circle({
+          map,
+          strokeColor: "#e23744",
+          strokeOpacity: 0.6,
+          strokeWeight: 2,
+          fillColor: "#e23744",
+          fillOpacity: 0.08,
+        });
+      }
+      circleRef.current.setCenter(pin);
+      circleRef.current.setRadius(radiusKm * 1000);
+      map.panTo(pin);
+    } else {
+      circleRef.current?.setMap(null);
+      circleRef.current = null;
     }
-
-    initMap();
-
-    return () => {
-      cancelled = true;
-      mapInstanceRef.current?.remove();
-      mapInstanceRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [map, pin, radiusKm]);
 
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
-
-    import("leaflet").then(({ default: L }) => {
-      updateMarkers(L, mapInstanceRef.current!);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providers, hoveredId]);
-
-  function updateMarkers(L: typeof import("leaflet"), map: L.Map) {
-    markersRef.current.forEach((m) => m.remove());
+    if (!map) return;
+    markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
 
     providers.forEach((p) => {
-      if (!p.minPrice) return;
-
       const isActive = hoveredId === p.id;
-      const price = `$${p.minPrice.toLocaleString("es-MX")}`;
-
-      const icon = L.divIcon({
-        className: "",
-        html: `<div class="price-bubble ${isActive ? "active" : ""}">${price}</div>`,
-        iconSize: [80, 30],
-        iconAnchor: [40, 15],
+      const label = p.minPrice ? `$${p.minPrice.toLocaleString("es-MX")}` : p.businessName;
+      const marker = new google.maps.Marker({
+        map,
+        position: { lat: p.latitude, lng: p.longitude },
+        title: `${p.businessName}${p.minPrice ? ` · ${label}` : ""}`,
+        label: {
+          text: label,
+          color: isActive ? "#ffffff" : "#111827",
+          fontSize: "12px",
+          fontWeight: "600",
+        },
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 18,
+          fillColor: isActive ? "#222222" : "#ffffff",
+          fillOpacity: 1,
+          strokeColor: isActive ? "#222222" : "#dddddd",
+          strokeWeight: 1,
+        },
       });
-
-      const marker = L.marker([p.latitude, p.longitude], { icon })
-        .addTo(map)
-        .on("mouseover", () => onMarkerHover(p.id))
-        .on("mouseout", () => onMarkerLeave());
-
+      marker.addListener("mouseover", () => onMarkerHover(p.id));
+      marker.addListener("mouseout", () => onMarkerLeave());
       markersRef.current.push(marker);
     });
+
+    return () => {
+      markersRef.current.forEach((m) => m.setMap(null));
+      markersRef.current = [];
+    };
+  }, [map, providers, hoveredId, onMarkerHover, onMarkerLeave]);
+
+  useEffect(() => {
+    if (!map) return;
+    if (!pin) {
+      userMarkerRef.current?.setMap(null);
+      userMarkerRef.current = null;
+      return;
+    }
+    if (!userMarkerRef.current) {
+      userMarkerRef.current = new google.maps.Marker({
+        map,
+        position: pin,
+        draggable: Boolean(onPinChange),
+        title: "Tu ubicación",
+        zIndex: 1000,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: "#e23744",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+        },
+      });
+      if (onPinChange) {
+        userMarkerRef.current.addListener("dragend", () => {
+          const pos = userMarkerRef.current?.getPosition();
+          if (pos) onPinChange(pos.lat(), pos.lng());
+        });
+      }
+    } else {
+      userMarkerRef.current.setPosition(pin);
+    }
+  }, [map, pin, onPinChange]);
+
+  return null;
+}
+
+export function ExploreMap(props: ExploreMapProps) {
+  const apiKey = getGoogleMapsApiKey();
+
+  if (!apiKey) {
+    return (
+      <div
+        className="flex h-full min-h-[300px] items-center justify-center rounded-xl bg-slate-100 px-4 text-center text-sm text-slate-600"
+        role="status"
+      >
+        Mapa no disponible
+      </div>
+    );
   }
 
+  const center = props.pin ?? MONTERREY_CENTER;
+
   return (
-    <div className="relative w-full h-full min-h-[400px] lg:min-h-0">
-      <div ref={mapRef} className="absolute inset-0 rounded-none lg:rounded-none" />
-    </div>
+    <GoogleMapsProvider>
+      <div className="relative h-full min-h-[300px] w-full lg:min-h-0">
+        <Map
+          className="absolute inset-0 h-full w-full"
+          defaultCenter={center}
+          defaultZoom={12}
+          gestureHandling="greedy"
+          disableDefaultUI={false}
+          reuseMaps
+          mapId="DEMO_MAP_ID"
+        >
+          <MapOverlays {...props} />
+        </Map>
+      </div>
+    </GoogleMapsProvider>
   );
 }

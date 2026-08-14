@@ -12,6 +12,7 @@ import { ApiError } from "@/lib/api/client";
 import type { CatalogItem } from "@/lib/api/types";
 import { OnboardingCTA } from "@/components/provider/OnboardingCTA";
 import { PriceInput } from "@/components/provider/PriceInput";
+import { ProviderSettingsForm } from "@/components/provider/ProviderSettingsForm";
 import { MediaUpload } from "@/components/ui/MediaUpload";
 import { SkeletonTable } from "@/components/ui/SkeletonCard";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -129,6 +130,7 @@ export function ProveedorPageClient() {
         <OnboardingCTA />
       ) : (
         <>
+          <ProviderSettingsForm />
           <section className="mb-10 space-y-6 rounded-xl border border-gray-200 bg-white p-6">
             <div>
               <h2 className="text-lg font-semibold">Imágenes del negocio</h2>

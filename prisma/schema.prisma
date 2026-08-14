@@ -58,6 +58,11 @@ enum UnitOfMeasure {
   GR
 }
 
+enum FulfillmentType {
+  PICKUP
+  DELIVERY
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -84,48 +89,78 @@ enum SystemModule {
 // ─── USUARIOS ────────────────────────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  name         String
-  phone        String?
-  role         UserRole @default(CLIENT)
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String   @map("password_hash")
+  name           String
+  phone          String?
+  role           UserRole @default(CLIENT)
+  isActive       Boolean  @default(true) @map("is_active")
+  whatsappOptIn  Boolean  @default(false) @map("whatsapp_opt_in")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  provider     Provider?
-  orders       Order[]   @relation("ClientOrders")
-  auditLogs    AuditLog[]
+  provider  Provider?
+  orders    Order[]       @relation("ClientOrders")
+  reviews   Review[]      @relation("ClientReviews")
+  addresses UserAddress[]
+  auditLogs AuditLog[]
 
   @@map("users")
+}
+
+// ─── DIRECCIONES DEL CLIENTE ─────────────────────────────────────────────────
+
+model UserAddress {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  label            String
+  formattedAddress String   @map("formatted_address")
+  lat              Float
+  lng              Float
+  isFavorite       Boolean  @default(true) @map("is_favorite")
+  isDefault        Boolean  @default(false) @map("is_default")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[] @relation("DeliveryAddress")
+
+  @@index([userId])
+  @@map("user_addresses")
 }
 
 // ─── PROVEEDORES (Fruterías / negocios) ─────────────────────────────────────
 
 model Provider {
-  id           String   @id @default(cuid())
-  userId       String   @unique @map("user_id")
-  businessName String   @map("business_name")
-  description  String?
-  address      String
-  city         String   @default("Monterrey")
-  state        String   @default("Nuevo León")
-  latitude     Float
-  longitude    Float
-  phone        String
-  logoUrl      String?  @map("logo_url")
-  coverUrl     String?  @map("cover_url")
-  rating       Float    @default(0)
-  reviewCount  Int      @default(0) @map("review_count")
-  isActive     Boolean  @default(true) @map("is_active")
-  isVerified   Boolean  @default(false) @map("is_verified")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                     String   @id @default(cuid())
+  userId                 String   @unique @map("user_id")
+  businessName           String   @map("business_name")
+  description            String?
+  address                String
+  city                   String   @default("Monterrey")
+  state                  String   @default("Nuevo León")
+  latitude               Float
+  longitude              Float
+  phone                  String
+  logoUrl                String?  @map("logo_url")
+  coverUrl               String?  @map("cover_url")
+  rating                 Float    @default(0)
+  reviewCount            Int      @default(0) @map("review_count")
+  isActive               Boolean  @default(true) @map("is_active")
+  isVerified             Boolean  @default(false) @map("is_verified")
+  preparationTimeMinutes Int      @default(20) @map("preparation_time_minutes")
+  offersDelivery         Boolean  @default(false) @map("offers_delivery")
+  googlePlaceId          String?  @map("google_place_id")
+  googleMapsUrl          String?  @map("google_maps_url")
+  googleReviewsEnabled   Boolean  @default(false) @map("google_reviews_enabled")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
 
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   providerProducts ProviderProduct[]
   orders           Order[]
+  reviews          Review[]
 
   @@index([city])
   @@index([businessName])
@@ -176,23 +211,29 @@ model ProviderProduct {
 // ─── PEDIDOS ─────────────────────────────────────────────────────────────────
 
 model Order {
-  id             String        @id @default(cuid())
-  clientId       String?       @map("client_id")
-  customerName   String?       @map("customer_name") @db.VarChar(80)
-  providerId     String        @map("provider_id")
-  source         OrderSource
-  status         OrderStatus   @default(PENDING)
-  paymentMethod  PaymentMethod @default(UNPAID) @map("payment_method")
-  paidAt         DateTime?     @map("paid_at")
-  total          Decimal       @db.Decimal(10, 2) @default(0)
-  notes          String?
-  idempotencyKey String?       @map("idempotency_key")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  id                      String          @id @default(cuid())
+  clientId                String?         @map("client_id")
+  customerName            String?         @map("customer_name") @db.VarChar(80)
+  providerId              String          @map("provider_id")
+  source                  OrderSource
+  status                  OrderStatus     @default(PENDING)
+  paymentMethod           PaymentMethod   @default(UNPAID) @map("payment_method")
+  paidAt                  DateTime?       @map("paid_at")
+  total                   Decimal         @db.Decimal(10, 2) @default(0)
+  notes                   String?
+  idempotencyKey          String?         @map("idempotency_key")
+  fulfillmentType         FulfillmentType @default(PICKUP) @map("fulfillment_type")
+  deliveryAddressId       String?         @map("delivery_address_id")
+  deliveryAddressSnapshot Json?           @map("delivery_address_snapshot")
+  etaMinutes              Int?            @map("eta_minutes")
+  createdAt               DateTime        @default(now()) @map("created_at")
+  updatedAt               DateTime        @updatedAt @map("updated_at")
 
-  client   User?       @relation("ClientOrders", fields: [clientId], references: [id], onDelete: SetNull)
-  provider Provider    @relation(fields: [providerId], references: [id])
-  items    OrderItem[]
+  client          User?        @relation("ClientOrders", fields: [clientId], references: [id], onDelete: SetNull)
+  provider        Provider     @relation(fields: [providerId], references: [id])
+  deliveryAddress UserAddress? @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id], onDelete: SetNull)
+  items           OrderItem[]
+  review          Review?
 
   @@unique([providerId, idempotencyKey])
   @@index([providerId, status, createdAt])
@@ -217,6 +258,26 @@ model OrderItem {
   providerProduct ProviderProduct? @relation(fields: [providerProductId], references: [id], onDelete: SetNull)
 
   @@map("order_items")
+}
+
+// ─── RESEÑAS NATIVAS ─────────────────────────────────────────────────────────
+
+model Review {
+  id         String   @id @default(cuid())
+  orderId    String   @unique @map("order_id")
+  clientId   String   @map("client_id")
+  providerId String   @map("provider_id")
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  client   User     @relation("ClientReviews", fields: [clientId], references: [id], onDelete: Restrict)
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+
+  @@index([providerId, createdAt])
+  @@map("reviews")
 }
 
 // ─── MÓDULOS DEL SISTEMA (catálogo admin) ────────────────────────────────────

@@ -8,6 +8,9 @@ export interface PaginationMeta {
   limit: number;
   total: number;
   totalPages: number;
+  radiusKm?: number;
+  rating?: number;
+  reviewCount?: number;
 }
 
 export interface AuthUser {
@@ -34,6 +37,7 @@ export interface ProviderListing {
   productCount: number;
   sampleProducts: { name: string; price: number; unit: string }[];
   minPrice: number | null;
+  distanceKm?: number;
 }
 
 export type UnitOfMeasure = "PZA" | "KG" | "GR";
@@ -69,6 +73,13 @@ export interface ProviderDetail {
   rating: number;
   reviewCount: number;
   isVerified: boolean;
+  preparationTimeMinutes?: number;
+  offersDelivery?: boolean;
+  googleReviews?: {
+    enabled: boolean;
+    placeId: string | null;
+    mapsUrl: string | null;
+  } | null;
   products: ProviderProduct[];
 }
 
@@ -78,6 +89,7 @@ export interface UserProfile {
   email: string;
   phone: string | null;
   role: "CLIENT";
+  whatsappOptIn?: boolean;
 }
 
 export interface ProviderBusiness {
@@ -92,6 +104,12 @@ export interface ProviderBusiness {
   isVerified: boolean;
   logoUrl: string | null;
   coverUrl: string | null;
+  preparationTimeMinutes?: number;
+  offersDelivery?: boolean;
+  googlePlaceId?: string | null;
+  googleMapsUrl?: string | null;
+  googleReviewsEnabled?: boolean;
+  googleReviewsLocked?: boolean;
 }
 
 export interface CatalogItem {
@@ -156,6 +174,15 @@ export interface OrderClient {
   phone: string | null;
 }
 
+export type FulfillmentType = "PICKUP" | "DELIVERY";
+
+export interface DeliveryAddressSnapshot {
+  label: string;
+  formattedAddress: string;
+  lat: number;
+  lng: number;
+}
+
 export interface Order {
   id: string;
   source: OrderSource;
@@ -171,6 +198,71 @@ export interface Order {
   items: OrderItem[];
   createdAt: string;
   client?: OrderClient | null;
+  fulfillmentType?: FulfillmentType;
+  etaMinutes?: number | null;
+  deliveryAddressSnapshot?: DeliveryAddressSnapshot | null;
+}
+
+export interface UserAddress {
+  id: string;
+  label: string;
+  formattedAddress: string;
+  lat: number;
+  lng: number;
+  isFavorite: boolean;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface ProviderReview {
+  id: string;
+  rating: number;
+  comment: string | null;
+  authorName: string;
+  createdAt: string;
+}
+
+export interface OrderReview {
+  id: string;
+  orderId: string;
+  providerId: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+export type EtaCopyKey = "eta_prep_only" | "eta_ready_approx";
+
+export interface ProviderEta {
+  providerId: string;
+  preparationTimeMinutes: number;
+  travelMinutes: number;
+  etaMinutes: number;
+  distanceKm: number;
+  fulfillmentType: FulfillmentType;
+  copyKey: EtaCopyKey;
+}
+
+export type AnalyticsRange = "today" | "7d" | "30d";
+
+export interface AdminAnalyticsKpis {
+  gmv: number;
+  orderCount: number;
+  activeProviders: number;
+  cancellationRate: number;
+  bySource: {
+    MARKETPLACE: { gmv: number; orderCount: number };
+    POS: { gmv: number; orderCount: number };
+  };
+}
+
+export interface AdminAnalytics {
+  empty: boolean;
+  range: AnalyticsRange;
+  timezone: string;
+  from: string;
+  to: string;
+  kpis: AdminAnalyticsKpis | null;
 }
 
 export interface ProviderOrderListItem {

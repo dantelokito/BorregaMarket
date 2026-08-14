@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency, formatQty } from "@/lib/format";
 import { shortOrderId, UNIT_LABEL } from "@/lib/orders/labels";
+import { ReviewForm } from "@/components/reviews/ReviewForm";
 
 export function OrdersHistory() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -111,7 +112,7 @@ export function OrdersHistory() {
                   </time>
                 </p>
               </div>
-              <OrderStatusBadge status={order.status} />
+              <OrderStatusBadge status={order.status} fulfillmentType={order.fulfillmentType} />
             </div>
             <ul className="mt-2 space-y-1 text-sm text-slate-600">
               {order.items.map((item, idx) => (
@@ -130,6 +131,9 @@ export function OrdersHistory() {
               >
                 Cancelar pedido
               </Button>
+            )}
+            {order.status === "DELIVERED" && order.source === "MARKETPLACE" && (
+              <ReviewForm orderId={order.id} />
             )}
           </li>
         ))}

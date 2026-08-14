@@ -67,9 +67,15 @@ export function ProviderHero({ provider }: ProviderHeroProps) {
         {provider.state ? `, ${provider.state}` : ""}
       </p>
       <div className="mt-2 flex items-center gap-1 text-sm">
-        <Star size={16} fill="currentColor" className="text-yellow-500" aria-hidden />
-        <span className="font-medium">{provider.rating.toFixed(1)}</span>
-        <span className="text-gray-400">({provider.reviewCount} reseñas)</span>
+        {provider.reviewCount === 0 ? (
+          <span className="text-gray-500">Sin reseñas todavía</span>
+        ) : (
+          <>
+            <Star size={16} fill="currentColor" className="text-yellow-500" aria-hidden />
+            <span className="font-medium">{provider.rating.toFixed(1)}</span>
+            <span className="text-gray-400">({provider.reviewCount} reseñas)</span>
+          </>
+        )}
       </div>
       {provider.description && (
         <p className="mt-4 text-gray-600">{provider.description}</p>

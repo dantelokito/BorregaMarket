@@ -110,7 +110,7 @@ async function main() {
   const providers = await Promise.all([
     prisma.provider.upsert({
       where: { userId: providerUser.id },
-      update: {},
+      update: { rating: 0, reviewCount: 0 },
       create: {
         userId: providerUser.id,
         businessName: "Frutas El Paraíso",
@@ -121,8 +121,8 @@ async function main() {
         phone: "+528110000002",
         logoUrl: "https://images.unsplash.com/photo-1610831308542-9b788b11c4e0?w=400",
         coverUrl: "https://images.unsplash.com/photo-1488459716781-31db525782fe?w=800",
-        rating: 4.92,
-        reviewCount: 128,
+        rating: 0,
+        reviewCount: 0,
         isVerified: true,
       },
     }),
@@ -143,7 +143,7 @@ async function main() {
 
   const provider2 = await prisma.provider.upsert({
     where: { userId: provider2User.id },
-    update: {},
+    update: { rating: 0, reviewCount: 0 },
     create: {
       userId: provider2User.id,
       businessName: "Campo Verde Frutería",
@@ -154,8 +154,8 @@ async function main() {
       phone: "+528110000004",
       logoUrl: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400",
       coverUrl: "https://images.unsplash.com/photo-1518843879619-1d2b755659a8?w=800",
-      rating: 4.78,
-      reviewCount: 89,
+      rating: 0,
+      reviewCount: 0,
       isVerified: true,
     },
   });
@@ -174,7 +174,7 @@ async function main() {
 
   const provider3 = await prisma.provider.upsert({
     where: { userId: provider3User.id },
-    update: {},
+    update: { rating: 0, reviewCount: 0 },
     create: {
       userId: provider3User.id,
       businessName: "La Borrega Agrícola",
@@ -185,8 +185,8 @@ async function main() {
       phone: "+528110000005",
       logoUrl: "https://images.unsplash.com/photo-1566385101042-1a0aa0c1269c?w=400",
       coverUrl: "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=800",
-      rating: 4.85,
-      reviewCount: 56,
+      rating: 0,
+      reviewCount: 0,
       isVerified: false,
     },
   });

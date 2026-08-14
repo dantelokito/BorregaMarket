@@ -72,11 +72,21 @@ export function ProviderCard({ provider, isHovered, onHover, onLeave }: Provider
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-[15px] font-semibold leading-tight">{provider.businessName}</h3>
             <div className="flex shrink-0 items-center gap-0.5 text-sm">
-              <Star size={14} fill="currentColor" />
-              <span>{provider.rating.toFixed(2)}</span>
-              <span className="text-gray-400">({provider.reviewCount})</span>
+              {provider.reviewCount === 0 ? (
+                <span className="text-xs text-gray-400">Sin reseñas todavía</span>
+              ) : (
+                <>
+                  <Star size={14} fill="currentColor" />
+                  <span>{provider.rating.toFixed(1)}</span>
+                  <span className="text-gray-400">({provider.reviewCount})</span>
+                </>
+              )}
             </div>
           </div>
+
+          {typeof provider.distanceKm === "number" && (
+            <p className="text-sm text-gray-500">{provider.distanceKm.toFixed(1)} km</p>
+          )}
 
           <p className="line-clamp-1 text-sm text-gray-500">
             {provider.description ?? "Frutería local"}

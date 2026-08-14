@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Search, Zap } from "lucide-react";
 import { getMyProducts } from "@/lib/api/provider-panel";
 import { createPosSale } from "@/lib/api/provider-ops";
@@ -16,8 +16,11 @@ import { NumericKeypad } from "./NumericKeypad";
 import { UnitSelector } from "./UnitSelector";
 import { PaymentMethodSelector } from "./PaymentMethodSelector";
 import { QuickSaleModal, type QuickSaleDraft } from "./QuickSaleModal";
+import { ScaleStatusBadge } from "./ScaleStatusBadge";
+import { usePosScale } from "./usePosScale";
 import { formatCurrency, formatQty, lineAmount, parseDecimalInput, qtyToApiString } from "@/lib/format";
 import { PAYMENT_METHOD_LABEL, UNIT_LABEL, shortOrderId, toUnitOfMeasure } from "@/lib/orders/labels";
+import { gramsToQuantity, isWeighableUnit } from "@/lib/pos/scale";
 
 interface TicketLine {
   key: string;
@@ -45,7 +48,40 @@ export function PosPageClient() {
   const [charging, setCharging] = useState(false);
   const [chargeError, setChargeError] = useState("");
   const [ticket, setTicket] = useState<Order | null>(null);
+  const [activeLineKey, setActiveLineKey] = useState<string | null>(null);
+  const [scaleHint, setScaleHint] = useState("");
   const idempotencyRef = useRef(crypto.randomUUID());
+  const activeLineKeyRef = useRef<string | null>(null);
+  const linesRef = useRef(lines);
+  const editingRef = useRef(editing);
+  activeLineKeyRef.current = activeLineKey;
+  linesRef.current = lines;
+  editingRef.current = editing;
+
+  const applyScaleWeight = useCallback((grams: number) => {
+    const key = activeLineKeyRef.current;
+    if (!key) return;
+    const line = linesRef.current.find((l) => l.key === key);
+    if (!line || line.isQuickSale) return;
+    const qty = gramsToQuantity(grams, line.unitOfMeasure);
+    if (qty == null) return;
+    setScaleHint("");
+    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, quantity: qty } : l)));
+    setEditing((current) => {
+      if (!current || current.key !== key) return current;
+      return { ...current, quantity: qty };
+    });
+    if (editingRef.current?.key === key) {
+      setQtyDraft(formatQty(qty));
+    }
+  }, []);
+
+  const scale = usePosScale({
+    onWeightChange: applyScaleWeight,
+    onParseError: () => {
+      setScaleHint("No pudimos leer el peso. Elige el modelo o usa el teclado.");
+    },
+  });
 
   async function load() {
     setLoading(true);
@@ -76,11 +112,19 @@ export function PosPageClient() {
     const price = item.price;
     if (!id || price == null) return;
     const unit = toUnitOfMeasure(item.product.unit);
+    const weighable = isWeighableUnit(unit);
     const existing = lines.find((l) => l.providerProductId === id);
     if (existing) {
+      if (weighable) {
+        setActiveLineKey(existing.key);
+        setEditing(existing);
+        setQtyDraft(formatQty(existing.quantity));
+        setQtyError("");
+        return;
+      }
       setLines((prev) =>
         prev.map((l) =>
-          l.key === existing.key ? { ...l, quantity: l.quantity + (unit === "PZA" ? 1 : 0.1) } : l
+          l.key === existing.key ? { ...l, quantity: l.quantity + 1 } : l
         )
       );
       return;
@@ -97,6 +141,7 @@ export function PosPageClient() {
         isQuickSale: false,
       },
     ]);
+    if (weighable) setActiveLineKey(id);
   }
 
   function addQuickSale(draft: QuickSaleDraft) {
@@ -159,6 +204,8 @@ export function PosPageClient() {
       );
       setTicket(data);
       setLines([]);
+      setActiveLineKey(null);
+      setEditing(null);
     } catch (err) {
       if (err instanceof ApiError) setChargeError(err.message || "No pudimos cobrar la venta");
       else setChargeError("No pudimos cobrar la venta");
@@ -171,6 +218,8 @@ export function PosPageClient() {
     setTicket(null);
     setLines([]);
     setChargeError("");
+    setActiveLineKey(null);
+    setEditing(null);
     idempotencyRef.current = crypto.randomUUID();
   }
 
@@ -282,7 +331,23 @@ export function PosPageClient() {
 
       <aside className="flex flex-col border-t bg-white lg:w-[42%] lg:border-l lg:border-t-0">
         <div className="flex-1 overflow-y-auto p-4">
-          <h2 className="text-lg font-semibold">Ticket</h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold">Ticket</h2>
+          </div>
+          <ScaleStatusBadge
+            status={scale.status}
+            driver={scale.driver}
+            drivers={scale.drivers}
+            liveGrams={scale.liveGrams}
+            onConnect={() => void scale.connect()}
+            onDisconnect={() => void scale.disconnect()}
+            onSelectDriver={scale.selectDriver}
+          />
+          {scaleHint ? (
+            <p className="mt-2 text-xs text-amber-800" role="status">
+              {scaleHint}
+            </p>
+          ) : null}
           {lines.length === 0 ? (
             <p className="mt-4 text-sm text-slate-500">Toca un producto o usa Venta rápida.</p>
           ) : (
@@ -295,8 +360,15 @@ export function PosPageClient() {
                       setEditing(line);
                       setQtyDraft(formatQty(line.quantity));
                       setQtyError("");
+                      if (!line.isQuickSale && isWeighableUnit(line.unitOfMeasure)) {
+                        setActiveLineKey(line.key);
+                      }
                     }}
-                    className="w-full rounded-lg border border-gray-200 p-3 text-left hover:bg-slate-50"
+                    className={`w-full rounded-lg border p-3 text-left hover:bg-slate-50 ${
+                      line.key === activeLineKey
+                        ? "border-[var(--brand)] ring-2 ring-[var(--brand)]"
+                        : "border-gray-200"
+                    }`}
                   >
                     <div className="flex justify-between gap-2">
                       <span className="font-medium">
@@ -338,6 +410,7 @@ export function PosPageClient() {
                   className="flex-1"
                   onClick={() => {
                     setLines((prev) => prev.filter((l) => l.key !== editing.key));
+                    if (activeLineKey === editing.key) setActiveLineKey(null);
                     setEditing(null);
                   }}
                 >

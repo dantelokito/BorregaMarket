@@ -8,6 +8,10 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   CANCELLED: "Cancelado",
 };
 
+export function inTransitLabel(fulfillmentType: "PICKUP" | "DELIVERY"): string {
+  return fulfillmentType === "DELIVERY" ? "En camino" : "Listo para recoger";
+}
+
 export const ORDER_SOURCE_LABEL: Record<OrderSource, string> = {
   MARKETPLACE: "App",
   POS: "Mostrador",

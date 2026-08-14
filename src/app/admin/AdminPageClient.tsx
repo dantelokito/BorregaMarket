@@ -163,6 +163,12 @@ export function AdminPageClient() {
             {t.label}
           </button>
         ))}
+        <Link
+          href="/admin/analytics"
+          className="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700"
+        >
+          Analítica
+        </Link>
       </div>
 
       {error && (

@@ -1,6 +1,6 @@
 import { Clock, CheckCircle2, PackageCheck, Truck, XCircle } from "lucide-react";
-import type { OrderStatus } from "@/lib/api/types";
-import { ORDER_STATUS_LABEL } from "@/lib/orders/labels";
+import type { FulfillmentType, OrderStatus } from "@/lib/api/types";
+import { ORDER_STATUS_LABEL, inTransitLabel } from "@/lib/orders/labels";
 
 const ICONS: Record<OrderStatus, typeof Clock> = {
   PENDING: Clock,
@@ -18,14 +18,25 @@ const STYLES: Record<OrderStatus, string> = {
   CANCELLED: "bg-red-50 text-red-700",
 };
 
-export function OrderStatusBadge({ status }: { status: OrderStatus }) {
-  const Icon = ICONS[status];
+export function OrderStatusBadge({
+  status,
+  fulfillmentType,
+}: {
+  status: OrderStatus;
+  fulfillmentType?: FulfillmentType;
+}) {
+  const Icon =
+    status === "IN_TRANSIT" && fulfillmentType === "DELIVERY" ? Truck : ICONS[status];
+  const label =
+    status === "IN_TRANSIT"
+      ? inTransitLabel(fulfillmentType ?? "PICKUP")
+      : ORDER_STATUS_LABEL[status];
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STYLES[status]}`}
     >
       <Icon size={12} aria-hidden />
-      {ORDER_STATUS_LABEL[status]}
+      {label}
     </span>
   );
 }

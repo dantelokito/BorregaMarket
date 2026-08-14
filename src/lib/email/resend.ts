@@ -49,10 +49,6 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-async function sleep(ms: number) {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 type EmailSendResult = {
   ok: boolean;
   reason?: "email_disabled" | "send_failed" | "no_email";
@@ -74,27 +70,20 @@ async function sendHtmlEmail(params: {
   }
 
   const resend = new Resend(apiKey);
-  const delays = [0, 1000, 2000];
-
-  for (let attempt = 0; attempt < delays.length; attempt++) {
-    if (delays[attempt] > 0) await sleep(delays[attempt]);
-    try {
-      const result = await resend.emails.send({
-        from,
-        to: params.to,
-        subject: params.subject,
-        html: params.html,
-      });
-      if (result.error) {
-        continue;
-      }
-      return { ok: true };
-    } catch {
-      // retry
+  try {
+    const result = await resend.emails.send({
+      from,
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+    });
+    if (result.error) {
+      return { ok: false, reason: "send_failed" };
     }
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "send_failed" };
   }
-
-  return { ok: false, reason: "send_failed" };
 }
 
 /**
@@ -119,9 +108,16 @@ export interface NewOrderEmailPayload {
   clientPhone?: string | null;
   total: string;
   items: Array<{ itemName: string; quantity: string; unitOfMeasure: string }>;
+  etaMinutes?: number | null;
+  fulfillmentType?: "PICKUP" | "DELIVERY";
 }
 
-function buildNewOrderHtml(payload: NewOrderEmailPayload): string {
+export function etaEstimateLine(etaMinutes: number | null | undefined): string | null {
+  if (etaMinutes === null || etaMinutes === undefined) return null;
+  return `Listo aprox. en ~${etaMinutes} min (estimación)`;
+}
+
+export function buildNewOrderHtml(payload: NewOrderEmailPayload): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:8080";
   const panelUrl = `${appUrl.replace(/\/$/, "")}/proveedor`;
   const lines = payload.items
@@ -133,15 +129,22 @@ function buildNewOrderHtml(payload: NewOrderEmailPayload): string {
   const phone = payload.clientPhone
     ? `<p><strong>Teléfono:</strong> ${escapeHtml(payload.clientPhone)}</p>`
     : "";
+  const fulfillment =
+    payload.fulfillmentType === "DELIVERY" ? "entrega a domicilio" : "recoger";
+  const etaLine = etaEstimateLine(payload.etaMinutes);
+  const etaHtml = etaLine
+    ? `<p><strong>Tiempo estimado:</strong> ${escapeHtml(etaLine)}</p>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="utf-8"><title>Nuevo pedido — La Borrega Market</title></head>
 <body style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#1a1a1a;max-width:560px;margin:0 auto;padding:24px;">
   <h1 style="font-size:20px;margin:0 0 16px;">Nuevo pedido</h1>
-  <p>Hola, <strong>${escapeHtml(payload.businessName)}</strong> tiene un pedido nuevo para recoger.</p>
+  <p>Hola, <strong>${escapeHtml(payload.businessName)}</strong> tiene un pedido nuevo para ${fulfillment}.</p>
   <p><strong>Cliente:</strong> ${escapeHtml(payload.clientName)}</p>
   ${phone}
+  ${etaHtml}
   <p><strong>Total:</strong> $${escapeHtml(payload.total)}</p>
   <p><strong>Productos:</strong></p>
   <ul>${lines}</ul>

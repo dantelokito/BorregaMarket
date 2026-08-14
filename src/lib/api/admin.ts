@@ -1,5 +1,5 @@
-import { apiGet, apiPatch, apiPostForm, buildQuery } from "./client";
-import type { AdminProvider, AuditLogEntry } from "./types";
+import { apiDelete, apiGet, apiPatch, apiPostForm, buildQuery } from "./client";
+import type { AdminAnalytics, AdminProvider, AnalyticsRange, AuditLogEntry } from "./types";
 
 export async function getAdminProviders(
   query: { verified?: boolean; page?: number; limit?: number } = {}
@@ -40,4 +40,13 @@ export async function uploadAdminProductImage(productId: string, file: File) {
     `/api/admin/products/${productId}/image`,
     form
   );
+}
+
+export async function getAdminAnalytics(range: AnalyticsRange = "7d") {
+  const qs = buildQuery({ range });
+  return apiGet<AdminAnalytics>(`/api/admin/analytics${qs}`);
+}
+
+export async function deleteAdminReview(id: string) {
+  return apiDelete<{ id: string; deleted: true }>(`/api/admin/reviews/${id}`);
 }

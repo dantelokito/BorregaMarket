@@ -10,8 +10,8 @@ interface AuditEntry {
   ipAddress?: string;
 }
 
-export async function writeAuditLog(entry: AuditEntry): Promise<void> {
-  await prisma.auditLog.create({
+export async function writeAuditLog(entry: AuditEntry): Promise<string> {
+  const created = await prisma.auditLog.create({
     data: {
       module: entry.module,
       action: entry.action,
@@ -21,4 +21,5 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
       ipAddress: entry.ipAddress,
     },
   });
+  return created.id;
 }

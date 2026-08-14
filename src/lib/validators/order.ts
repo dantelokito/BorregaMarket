@@ -1,10 +1,12 @@
 import { z } from "zod";
 import {
+  FulfillmentType,
   OrderStatus,
   PaymentMethod,
   UnitOfMeasure,
 } from "@prisma/client";
 import { Decimal, hasMaxDecimals, isPositive } from "@/lib/money";
+import { monterreyLatSchema, monterreyLngSchema } from "@/lib/validators/geo";
 
 const cuidLike = z.string().min(1, "Requerido");
 
@@ -63,14 +65,37 @@ const marketplaceItemSchema = z
     }
   });
 
-export const createMarketplaceOrderSchema = z.object({
-  providerId: cuidLike,
-  notes: z.string().trim().max(280).optional().nullable(),
-  items: z
-    .array(marketplaceItemSchema)
-    .min(1, "El pedido no puede estar vacío")
-    .max(50, "Máximo 50 líneas"),
-});
+export const createMarketplaceOrderSchema = z
+  .object({
+    providerId: cuidLike,
+    notes: z.string().trim().max(280).optional().nullable(),
+    items: z
+      .array(marketplaceItemSchema)
+      .min(1, "El pedido no puede estar vacío")
+      .max(50, "Máximo 50 líneas"),
+    fulfillmentType: z.nativeEnum(FulfillmentType).optional().default(FulfillmentType.PICKUP),
+    deliveryAddressId: z.string().min(1).optional(),
+    clientLat: monterreyLatSchema.optional(),
+    clientLng: monterreyLngSchema.optional(),
+  })
+  .superRefine((body, ctx) => {
+    const hasLat = body.clientLat !== undefined;
+    const hasLng = body.clientLng !== undefined;
+    if (hasLat !== hasLng) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: hasLat ? ["clientLng"] : ["clientLat"],
+        message: "lat y lng deben enviarse juntos",
+      });
+    }
+    if (body.fulfillmentType === FulfillmentType.DELIVERY && !body.deliveryAddressId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["deliveryAddressId"],
+        message: "Requerido para entrega a domicilio",
+      });
+    }
+  });
 
 export const patchOrderStatusSchema = z.object({
   status: z.nativeEnum(OrderStatus, {

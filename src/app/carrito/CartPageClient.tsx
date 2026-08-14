@@ -12,11 +12,12 @@ import {
   setItemQuantity,
   type CartItem,
 } from "@/lib/cart/session-cart";
-import { getProviderById } from "@/lib/api/providers";
+import { getProviderById, getProviderEta } from "@/lib/api/providers";
 import { createOrder } from "@/lib/api/orders";
 import { getMyProfile } from "@/lib/api/users";
+import { listMyAddresses } from "@/lib/api/addresses";
 import { ApiError } from "@/lib/api/client";
-import type { Order } from "@/lib/api/types";
+import type { FulfillmentType, Order, ProviderDetail, ProviderEta, UserAddress } from "@/lib/api/types";
 import { QuantityStepper } from "@/components/ui/QuantityStepper";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -24,9 +25,12 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { ImagePlaceholder } from "@/components/ui/ImagePlaceholder";
 import { PickupNotice } from "@/components/cart/PickupNotice";
 import { OrderSuccessPanel } from "@/components/cart/OrderSuccessPanel";
+import { EtaChip } from "@/components/cart/EtaChip";
+import { FulfillmentToggle } from "@/components/cart/FulfillmentToggle";
 import { useToast } from "@/components/ui/Toast";
 import { formatCurrency, lineAmount, qtyToApiString } from "@/lib/format";
 import { UNIT_LABEL } from "@/lib/orders/labels";
+import { readExplorePin } from "@/lib/maps/constants";
 
 export function CartPageClient() {
   const { cart, hydrated, save } = useCart();
@@ -38,6 +42,11 @@ export function CartPageClient() {
   const [submitError, setSubmitError] = useState("");
   const [isGuest, setIsGuest] = useState(false);
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
+  const [provider, setProvider] = useState<ProviderDetail | null>(null);
+  const [eta, setEta] = useState<ProviderEta | null>(null);
+  const [fulfillment, setFulfillment] = useState<FulfillmentType>("PICKUP");
+  const [addresses, setAddresses] = useState<UserAddress[]>([]);
+  const [deliveryAddressId, setDeliveryAddressId] = useState<string>("");
   const idempotencyRef = useRef(crypto.randomUUID());
 
   const itemCount = cartItemCount(cart);
@@ -52,6 +61,7 @@ export function CartPageClient() {
     setChecking(true);
     try {
       const { data } = await getProviderById(cart.providerId);
+      setProvider(data);
       const available = new Set(
         data.products.filter((p) => p.isAvailable).map((p) => p.providerProductId)
       );
@@ -81,7 +91,31 @@ export function CartPageClient() {
           setIsGuest(true);
         }
       });
+    listMyAddresses()
+      .then(({ data }) => {
+        setAddresses(data);
+        const def = data.find((a) => a.isDefault) ?? data[0];
+        if (def) setDeliveryAddressId(def.id);
+      })
+      .catch(() => {
+        /* guest */
+      });
   }, []);
+
+  useEffect(() => {
+    if (!cart) return;
+    const pin = readExplorePin();
+    const addr = addresses.find((a) => a.id === deliveryAddressId);
+    const lat = fulfillment === "DELIVERY" ? addr?.lat : pin?.lat;
+    const lng = fulfillment === "DELIVERY" ? addr?.lng : pin?.lng;
+    getProviderEta(cart.providerId, {
+      lat,
+      lng,
+      fulfillmentType: fulfillment,
+    })
+      .then(({ data }) => setEta(data))
+      .catch(() => setEta(null));
+  }, [cart, fulfillment, deliveryAddressId, addresses]);
 
   function removeItem(item: CartItem) {
     if (!cart) return;
@@ -91,6 +125,7 @@ export function CartPageClient() {
 
   async function confirmOrder() {
     if (!cart || hasUnavailable) return;
+    if (fulfillment === "DELIVERY" && !deliveryAddressId) return;
     if (isGuest) {
       window.location.href = `/login?next=${encodeURIComponent("/carrito")}`;
       return;
@@ -98,6 +133,7 @@ export function CartPageClient() {
     setSubmitting(true);
     setSubmitError("");
     try {
+      const pin = readExplorePin();
       const { data } = await createOrder(
         {
           providerId: cart.providerId,
@@ -107,6 +143,10 @@ export function CartPageClient() {
             quantity: qtyToApiString(i.quantity),
             unitOfMeasure: i.unitOfMeasure,
           })),
+          fulfillmentType: fulfillment,
+          deliveryAddressId: fulfillment === "DELIVERY" ? deliveryAddressId : undefined,
+          clientLat: pin?.lat,
+          clientLng: pin?.lng,
         },
         idempotencyRef.current
       );
@@ -267,6 +307,37 @@ export function CartPageClient() {
             );
           })}
 
+          {provider?.offersDelivery && (
+            <div className="space-y-3 rounded-xl border border-gray-200 p-4">
+              <FulfillmentToggle value={fulfillment} onChange={setFulfillment} />
+              {fulfillment === "DELIVERY" && (
+                <div>
+                  <label htmlFor="delivery-address" className="mb-1 block text-sm font-medium">
+                    Dirección de entrega
+                  </label>
+                  {addresses.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      Guarda una dirección favorita en Explorar o en tu cuenta.
+                    </p>
+                  ) : (
+                    <select
+                      id="delivery-address"
+                      value={deliveryAddressId}
+                      onChange={(e) => setDeliveryAddressId(e.target.value)}
+                      className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
+                    >
+                      {addresses.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.label} — {a.formattedAddress}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <label htmlFor="order-notes" className="mb-1 block text-sm font-medium">
               Notas para la frutería (opcional)
@@ -291,6 +362,9 @@ export function CartPageClient() {
             hasUnavailable={hasUnavailable}
             submitting={submitting}
             onConfirm={confirmOrder}
+            eta={eta}
+            fulfillment={fulfillment}
+            deliveryBlocked={fulfillment === "DELIVERY" && !deliveryAddressId}
           />
         </aside>
       </div>
@@ -303,6 +377,9 @@ export function CartPageClient() {
           submitting={submitting}
           onConfirm={confirmOrder}
           compact
+          eta={eta}
+          fulfillment={fulfillment}
+          deliveryBlocked={fulfillment === "DELIVERY" && !deliveryAddressId}
         />
       </div>
     </div>
@@ -316,6 +393,9 @@ function CartSummary({
   submitting,
   onConfirm,
   compact = false,
+  eta,
+  fulfillment = "PICKUP",
+  deliveryBlocked = false,
 }: {
   itemCount: number;
   total: number;
@@ -323,6 +403,9 @@ function CartSummary({
   submitting: boolean;
   onConfirm: () => void;
   compact?: boolean;
+  eta?: ProviderEta | null;
+  fulfillment?: FulfillmentType;
+  deliveryBlocked?: boolean;
 }) {
   return (
     <div className={compact ? "flex items-center justify-between gap-3" : "space-y-4"}>
@@ -339,7 +422,12 @@ function CartSummary({
                 {formatCurrency(total)}
               </span>
             </div>
-            <PickupNotice className="mt-3" />
+            {eta ? <EtaChip eta={eta} className="mt-3" /> : (
+              <p className="mt-3 text-xs text-slate-400">Estimación de tiempo no disponible</p>
+            )}
+            {fulfillment === "PICKUP" ? <PickupNotice className="mt-3" /> : (
+              <p className="mt-3 text-sm text-slate-600">Pagas al recibir</p>
+            )}
             <p className="mt-1 text-xs text-slate-400">Sin pago en línea</p>
           </>
         )}
@@ -351,11 +439,14 @@ function CartSummary({
         {hasUnavailable && (
           <p className="mt-2 text-xs text-amber-700">Quita los productos no disponibles</p>
         )}
+        {deliveryBlocked && (
+          <p className="mt-2 text-xs text-amber-700">Elige una dirección de entrega</p>
+        )}
       </div>
       <Button
         className={compact ? "h-14 min-w-40" : "h-14 w-full"}
         onClick={onConfirm}
-        disabled={hasUnavailable || itemCount === 0}
+        disabled={hasUnavailable || itemCount === 0 || deliveryBlocked}
         loading={submitting}
         loadingText="Enviando…"
       >

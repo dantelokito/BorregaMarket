@@ -1,10 +1,8 @@
 import { NextRequest } from "next/server";
-import { after } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getSession, requireRole } from "@/lib/auth/session";
 import { ok, paginated } from "@/lib/api/response";
 import { parsePaginationParams } from "@/lib/services/pagination";
-import { sendNewOrderEmail } from "@/lib/email/resend";
 import { handleOrderRouteError } from "@/lib/orders/http";
 import {
   createMarketplaceOrder,
@@ -64,13 +62,6 @@ export async function POST(request: NextRequest) {
       idempotencyKey: headers["Idempotency-Key"],
       ipAddress: clientIp(request),
     });
-
-    if (result.emailJob) {
-      const job = result.emailJob;
-      after(async () => {
-        await sendNewOrderEmail(job);
-      });
-    }
 
     return ok(result.order, result.replay ? 200 : 201);
   } catch (err) {

@@ -19,6 +19,7 @@ function mapClientProfile(user: {
   email: string;
   phone: string | null;
   role: string;
+  whatsappOptIn: boolean;
 }) {
   return {
     id: user.id,
@@ -26,13 +27,21 @@ function mapClientProfile(user: {
     email: user.email,
     phone: user.phone,
     role: user.role,
+    whatsappOptIn: user.whatsappOptIn,
   };
 }
 
 export async function getClientProfile(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, phone: true, role: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      whatsappOptIn: true,
+    },
   });
 
   if (!user) {
@@ -54,8 +63,18 @@ export async function updateClientProfile(
     data: {
       ...(parsed.name !== undefined ? { name: parsed.name } : {}),
       ...(parsed.phone !== undefined ? { phone: parsed.phone } : {}),
+      ...(parsed.whatsappOptIn !== undefined
+        ? { whatsappOptIn: parsed.whatsappOptIn }
+        : {}),
     },
-    select: { id: true, name: true, email: true, phone: true, role: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      whatsappOptIn: true,
+    },
   });
 
   await writeAuditLog({
@@ -64,7 +83,11 @@ export async function updateClientProfile(
     entityId: userId,
     userId,
     ipAddress,
-    details: { name: parsed.name, phone: parsed.phone },
+    details: {
+      name: parsed.name,
+      phone: parsed.phone,
+      whatsappOptIn: parsed.whatsappOptIn,
+    },
   });
 
   return mapClientProfile(user);

@@ -1,5 +1,6 @@
 import {
   AuditAction,
+  FulfillmentType,
   OrderSource,
   OrderStatus,
   PaymentMethod,
@@ -11,7 +12,10 @@ import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { buildMeta } from "@/lib/services/pagination";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
-import { formatMoney, formatQuantity, lineSubtotal, sumMoney, toMoney } from "@/lib/money";
+import { AddressNotFoundError } from "@/lib/services/address.service";
+import { formatMoney, lineSubtotal, sumMoney, toMoney } from "@/lib/money";
+import { computeEtaMinutes } from "@/lib/geo/eta";
+import { haversineKm } from "@/lib/geo/haversine";
 import {
   InvalidTransitionError,
   OrderForbiddenError,
@@ -25,11 +29,12 @@ import {
   serializeClientOrderSummary,
   serializeOrder,
   serializeProviderOrderRow,
+  type DeliveryAddressSnapshot,
   type OrderRecord,
 } from "@/lib/orders/serialize";
 import { canTransition } from "@/lib/orders/transitions";
 import type { CreateMarketplaceOrderInput } from "@/lib/validators/order";
-import type { NewOrderEmailPayload } from "@/lib/email/resend";
+import { inngest } from "@/lib/inngest/client";
 
 const ACTIVE_STATUSES: OrderStatus[] = [
   OrderStatus.PENDING,
@@ -74,7 +79,6 @@ export async function createMarketplaceOrder(params: {
 }): Promise<{
   replay: boolean;
   order: ReturnType<typeof serializeOrder>;
-  emailJob: NewOrderEmailPayload | null;
 }> {
   const existing = await findOrderByIdempotency(
     params.input.providerId,
@@ -84,23 +88,65 @@ export async function createMarketplaceOrder(params: {
     return {
       replay: true,
       order: serializeOrder(asOrderRecord(existing)),
-      emailJob: null,
     };
   }
 
-  const [provider, client] = await Promise.all([
-    prisma.provider.findFirst({
-      where: { id: params.input.providerId, isActive: true },
-      include: { user: { select: { email: true } } },
-    }),
-    prisma.user.findUnique({
-      where: { id: params.clientId },
-      select: { name: true, phone: true },
-    }),
-  ]);
+  const provider = await prisma.provider.findFirst({
+    where: { id: params.input.providerId, isActive: true },
+  });
   if (!provider) {
     throw new ProviderNotFoundError();
   }
+
+  const fulfillmentType = params.input.fulfillmentType ?? FulfillmentType.PICKUP;
+  if (fulfillmentType === FulfillmentType.DELIVERY && !provider.offersDelivery) {
+    throw new OrderValidationError("Validation failed", [
+      {
+        field: "fulfillmentType",
+        message: "Este negocio no ofrece entrega a domicilio",
+      },
+    ]);
+  }
+
+  let deliveryAddressId: string | null = null;
+  let deliveryAddressSnapshot: DeliveryAddressSnapshot | null = null;
+  if (fulfillmentType === FulfillmentType.DELIVERY) {
+    const addressId = params.input.deliveryAddressId;
+    if (!addressId) {
+      throw new OrderValidationError("Validation failed", [
+        {
+          field: "deliveryAddressId",
+          message: "Requerido para entrega a domicilio",
+        },
+      ]);
+    }
+    const address = await prisma.userAddress.findFirst({
+      where: { id: addressId, userId: params.clientId },
+    });
+    if (!address) {
+      throw new AddressNotFoundError();
+    }
+    deliveryAddressId = address.id;
+    deliveryAddressSnapshot = {
+      label: address.label,
+      formattedAddress: address.formattedAddress,
+      lat: address.lat,
+      lng: address.lng,
+    };
+  }
+
+  const clientLat =
+    deliveryAddressSnapshot?.lat ?? params.input.clientLat ?? null;
+  const clientLng =
+    deliveryAddressSnapshot?.lng ?? params.input.clientLng ?? null;
+  const distanceKm =
+    clientLat !== null && clientLng !== null
+      ? haversineKm(clientLat, clientLng, provider.latitude, provider.longitude)
+      : 0;
+  const eta = computeEtaMinutes({
+    preparationTimeMinutes: provider.preparationTimeMinutes,
+    distanceKm,
+  });
 
   const lines = consolidateMarketplaceItems(
     params.input.items.map((item) => ({
@@ -161,6 +207,13 @@ export async function createMarketplaceOrder(params: {
         notes: params.input.notes ?? null,
         idempotencyKey: params.idempotencyKey,
         total,
+        fulfillmentType,
+        deliveryAddressId,
+        deliveryAddressSnapshot:
+          deliveryAddressSnapshot === null
+            ? Prisma.JsonNull
+            : deliveryAddressSnapshot,
+        etaMinutes: eta.etaMinutes,
         items: {
           create: prepared.map((line) => ({
             providerProductId: line.providerProductId,
@@ -185,7 +238,6 @@ export async function createMarketplaceOrder(params: {
         return {
           replay: true,
           order: serializeOrder(asOrderRecord(replayed)),
-          emailJob: null,
         };
       }
     }
@@ -210,25 +262,28 @@ export async function createMarketplaceOrder(params: {
     },
   });
 
-  const emailJob: NewOrderEmailPayload | null = provider.user.email
-    ? {
-        to: provider.user.email,
-        businessName: provider.businessName,
-        clientName: client?.name ?? params.clientName,
-        clientPhone: client?.phone ?? params.clientPhone,
-        total: formatMoney(total),
-        items: prepared.map((line) => ({
-          itemName: line.itemName,
-          quantity: formatQuantity(line.quantity),
-          unitOfMeasure: line.unitOfMeasure,
-        })),
-      }
-    : null;
+  try {
+    await inngest.send({
+      name: "notify/order.created",
+      data: { orderId: created.id },
+    });
+  } catch {
+    await writeAuditLog({
+      module: SystemModule.ORDERS,
+      action: AuditAction.CREATE,
+      entityId: created.id,
+      userId: params.clientId,
+      ipAddress: params.ipAddress,
+      details: {
+        notificationFailed: true,
+        reason: "inngest_send_failed",
+      },
+    });
+  }
 
   return {
     replay: false,
     order: serializeOrder(asOrderRecord(created)),
-    emailJob,
   };
 }
 
@@ -335,6 +390,28 @@ export async function transitionStatus(params: {
       source: record.source,
     },
   });
+
+  if (params.nextStatus === OrderStatus.IN_TRANSIT) {
+    try {
+      await inngest.send({
+        name: "notify/order.status",
+        data: { orderId: order.id, status: OrderStatus.IN_TRANSIT },
+      });
+    } catch {
+      await writeAuditLog({
+        module: SystemModule.ORDERS,
+        action: AuditAction.UPDATE,
+        entityId: order.id,
+        userId: params.session.sub,
+        ipAddress: params.ipAddress,
+        details: {
+          notificationFailed: true,
+          reason: "inngest_send_failed",
+          event: "notify/order.status",
+        },
+      });
+    }
+  }
 
   const includeClient =
     params.session.role === UserRole.PROVIDER ||

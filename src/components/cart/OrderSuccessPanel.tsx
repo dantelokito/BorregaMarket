@@ -13,7 +13,7 @@ export function OrderSuccessPanel({ order }: { order: Order }) {
       <h2 className="mt-4 text-2xl font-semibold">Pedido #{shortOrderId(order.id)} enviado</h2>
       <p className="mt-2 text-sm text-slate-500">La frutería confirmará tu encargo</p>
       <div className="mt-3 flex justify-center">
-        <OrderStatusBadge status={order.status} />
+        <OrderStatusBadge status={order.status} fulfillmentType={order.fulfillmentType} />
       </div>
       <p className="mt-4 text-sm font-medium tabular-nums">{formatCurrency(order.total)}</p>
       <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:justify-center">

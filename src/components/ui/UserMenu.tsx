@@ -63,6 +63,7 @@ export function UserMenu({ user }: UserMenuProps) {
     ],
     ADMIN: [
       { href: "/admin", label: "Panel admin", icon: Shield },
+      { href: "/admin/analytics", label: "Analítica", icon: Shield },
       { href: "/explorar", label: "Explorar", icon: Search },
     ],
   };

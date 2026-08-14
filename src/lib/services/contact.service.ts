@@ -1,13 +1,15 @@
 import { SystemModule, AuditAction } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
-import { checkContactRateLimit } from "@/lib/rate-limit/contact";
 import {
-  sendContactNotification,
-  recordContactNotificationFailure,
-} from "@/lib/email/resend";
+  checkContactRateLimit,
+  ContactRedisUnavailableError,
+} from "@/lib/rate-limit/contact";
+import { inngest } from "@/lib/inngest/client";
 import type { ContactBodyInput } from "@/lib/validators/contact";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+
+export { ContactRedisUnavailableError };
 
 export class ContactRateLimitError extends Error {
   constructor(message = "Demasiados intentos. Intenta más tarde.") {
@@ -19,23 +21,10 @@ export class ContactRateLimitError extends Error {
 export interface ContactResult {
   notified: true;
   message: string;
-  /** Payload para schedule async vía after() en el route */
-  emailJob: {
-    to: string;
-    businessName: string;
-    providerId: string;
-    productIds: string[];
-    productNames: string[];
-    source: string;
-    timestampIso: string;
-    userId?: string;
-    ipAddress?: string;
-  } | null;
 }
 
 /**
- * Registra CONTACT sync + prepara email async.
- * El route debe invocar after() con runContactEmailJob(emailJob).
+ * Registra CONTACT sync + encola email vía Inngest (ADR-015).
  */
 export async function registerContact(
   providerId: string,
@@ -56,7 +45,7 @@ export async function registerContact(
   }
 
   const ip = opts.ipAddress ?? "unknown";
-  const allowed = checkContactRateLimit({
+  const allowed = await checkContactRateLimit({
     providerId,
     ip,
     sessionId: opts.sessionId ?? opts.userId ?? null,
@@ -98,8 +87,7 @@ export async function registerContact(
   const ownerEmail = provider.user.email?.trim() ?? "";
   const hasValidOwnerEmail = isValidEmail(ownerEmail);
 
-  // US-NOTIFY-04 / API-NOTIFY-01: sin email válido → AUDIT notificationFailed, sin error al cliente
-  await writeAuditLog({
+  const auditId = await writeAuditLog({
     module: SystemModule.PROVIDERS,
     action: AuditAction.CONTACT,
     entityId: provider.id,
@@ -115,13 +103,12 @@ export async function registerContact(
     },
   });
 
-  return {
-    notified: true,
-    message: "Frutería notificada",
-    emailJob: hasValidOwnerEmail
-      ? {
-          to: ownerEmail,
-          businessName: provider.businessName,
+  if (hasValidOwnerEmail) {
+    try {
+      await inngest.send({
+        name: "notify/contact.requested",
+        data: {
+          auditId,
           providerId: provider.id,
           productIds,
           productNames,
@@ -129,38 +116,35 @@ export async function registerContact(
           timestampIso,
           userId: opts.userId,
           ipAddress: ip,
-        }
-      : null,
+          to: ownerEmail,
+          businessName: provider.businessName,
+        },
+      });
+    } catch {
+      await writeAuditLog({
+        module: SystemModule.PROVIDERS,
+        action: AuditAction.CONTACT,
+        entityId: provider.id,
+        userId: opts.userId,
+        ipAddress: ip,
+        details: {
+          source: body.source,
+          productIds,
+          productNames,
+          rateLimited: false,
+          notificationFailed: true,
+          reason: "inngest_send_failed",
+        },
+      });
+    }
+  }
+
+  return {
+    notified: true,
+    message: "Frutería notificada",
   };
 }
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-export async function runContactEmailJob(
-  job: NonNullable<ContactResult["emailJob"]>
-): Promise<void> {
-  const result = await sendContactNotification({
-    to: job.to,
-    businessName: job.businessName,
-    providerId: job.providerId,
-    productNames: job.productNames,
-    source: job.source,
-    timestampIso: job.timestampIso,
-    userId: job.userId,
-    ipAddress: job.ipAddress,
-  });
-
-  if (!result.ok && result.reason) {
-    await recordContactNotificationFailure({
-      providerId: job.providerId,
-      source: job.source,
-      productIds: job.productIds,
-      productNames: job.productNames,
-      reason: result.reason,
-      userId: job.userId,
-      ipAddress: job.ipAddress,
-    });
-  }
 }

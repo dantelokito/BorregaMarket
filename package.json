@@ -1,8 +1,9 @@
 {
   "name": "laborregamarket",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev -p 8080",
     "build": "next build",
     "start": "next start -p 8080",
@@ -17,15 +18,16 @@
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
+    "@upstash/redis": "^1.38.2",
+    "@vis.gl/react-google-maps": "^1.9.0",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.10.0",
+    "inngest": "^3.54.0",
     "jsonwebtoken": "^9.0.2",
-    "leaflet": "^1.9.4",
     "lucide-react": "^0.484.0",
     "next": "^15.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-leaflet": "^5.0.0",
     "resend": "^6.18.1",
     "zod": "^3.24.2"
   },
@@ -34,7 +36,6 @@
     "@tailwindcss/postcss": "^4.0.17",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.9",
-    "@types/leaflet": "^1.9.16",
     "@types/node": "^22.13.10",
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.4",

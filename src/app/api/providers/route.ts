@@ -3,6 +3,7 @@ import { UserRole, ProductCategory } from "@prisma/client";
 import { getSession, requireRole, AuthError } from "@/lib/auth/session";
 import { ok, paginated, apiError, handleRouteError } from "@/lib/api/response";
 import { parsePaginationParams } from "@/lib/services/pagination";
+import { geoListQuerySchema } from "@/lib/validators/geo";
 import {
   createProvider,
   createProviderSchema,
@@ -38,6 +39,12 @@ export async function GET(request: NextRequest) {
     const verifiedParam = searchParams.get("verified");
     const verified = verifiedParam === "true";
 
+    const geoQuery = geoListQuerySchema.parse({
+      lat: searchParams.get("lat"),
+      lng: searchParams.get("lng"),
+      radiusKm: searchParams.get("radiusKm"),
+    });
+
     const result = await listProviders(
       {
         city: searchParams.get("city"),
@@ -46,6 +53,7 @@ export async function GET(request: NextRequest) {
         category: categoryParam
           ? (categoryParam as "FRUTA" | "VERDURA" | "AGRICOLA")
           : null,
+        geo: geoQuery.geo,
       },
       { page, limit, skip }
     );
