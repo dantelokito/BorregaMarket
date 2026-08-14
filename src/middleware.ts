@@ -8,7 +8,7 @@ import {
   isClientRoute,
 } from "@/lib/auth/permissions";
 
-const PUBLIC_PATHS = ["/", "/login", "/registro", "/explorar"];
+const PUBLIC_PATHS = ["/", "/login", "/registro", "/explorar", "/fruteria", "/carrito"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

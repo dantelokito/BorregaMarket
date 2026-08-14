@@ -41,6 +41,23 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum OrderSource {
+  MARKETPLACE
+  POS
+}
+
+enum PaymentMethod {
+  UNPAID
+  CASH
+  OTHER
+}
+
+enum UnitOfMeasure {
+  PZA
+  KG
+  GR
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -159,34 +176,45 @@ model ProviderProduct {
 // ─── PEDIDOS ─────────────────────────────────────────────────────────────────
 
 model Order {
-  id         String      @id @default(cuid())
-  clientId   String      @map("client_id")
-  providerId String      @map("provider_id")
-  status     OrderStatus @default(PENDING)
-  total      Decimal     @db.Decimal(10, 2) @default(0)
-  notes      String?
-  createdAt  DateTime    @default(now()) @map("created_at")
-  updatedAt  DateTime    @updatedAt @map("updated_at")
+  id             String        @id @default(cuid())
+  clientId       String?       @map("client_id")
+  customerName   String?       @map("customer_name") @db.VarChar(80)
+  providerId     String        @map("provider_id")
+  source         OrderSource
+  status         OrderStatus   @default(PENDING)
+  paymentMethod  PaymentMethod @default(UNPAID) @map("payment_method")
+  paidAt         DateTime?     @map("paid_at")
+  total          Decimal       @db.Decimal(10, 2) @default(0)
+  notes          String?
+  idempotencyKey String?       @map("idempotency_key")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
 
-  client   User        @relation("ClientOrders", fields: [clientId], references: [id])
+  client   User?       @relation("ClientOrders", fields: [clientId], references: [id], onDelete: SetNull)
   provider Provider    @relation(fields: [providerId], references: [id])
   items    OrderItem[]
 
+  @@unique([providerId, idempotencyKey])
+  @@index([providerId, status, createdAt])
+  @@index([providerId, createdAt])
+  @@index([clientId, createdAt])
   @@map("orders")
 }
 
 model OrderItem {
-  id                String  @id @default(cuid())
-  orderId           String  @map("order_id")
-  productId         String  @map("product_id")
-  providerProductId String  @map("provider_product_id")
-  quantity          Decimal @db.Decimal(10, 2)
-  unitPrice         Decimal @db.Decimal(10, 2) @map("unit_price")
-  subtotal          Decimal @db.Decimal(10, 2)
+  id                String        @id @default(cuid())
+  orderId           String        @map("order_id")
+  productId         String?       @map("product_id")
+  providerProductId String?       @map("provider_product_id")
+  itemName          String        @map("item_name") @db.VarChar(120)
+  quantity          Decimal       @db.Decimal(10, 3)
+  unitOfMeasure     UnitOfMeasure @default(PZA) @map("unit_of_measure")
+  unitPrice         Decimal       @db.Decimal(10, 2) @map("unit_price")
+  subtotal          Decimal       @db.Decimal(10, 2)
 
-  order           Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product         Product         @relation(fields: [productId], references: [id])
-  providerProduct ProviderProduct @relation(fields: [providerProductId], references: [id])
+  order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  providerProduct ProviderProduct? @relation(fields: [providerProductId], references: [id], onDelete: SetNull)
 
   @@map("order_items")
 }

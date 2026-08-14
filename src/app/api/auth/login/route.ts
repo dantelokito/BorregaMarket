@@ -1,14 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { SystemModule, AuditAction } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
 import { signToken, TOKEN_COOKIE } from "@/lib/auth/token";
 import { writeAuditLog } from "@/lib/audit";
+import { ok, apiError, fromZodError } from "@/lib/api/response";
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
-  password: z.string().min(6, "Contraseña mínima 6 caracteres"),
+  password: z.string().min(8, "Contraseña mínima 8 caracteres"),
 });
 
 export async function POST(request: NextRequest) {
@@ -18,12 +19,12 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !user.isActive) {
-      return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
+      return apiError("Credenciales inválidas", 401);
     }
 
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
-      return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
+      return apiError("Credenciales inválidas", 401);
     }
 
     const token = signToken({
@@ -42,8 +43,7 @@ export async function POST(request: NextRequest) {
       details: { email: user.email, role: user.role },
     });
 
-    const response = NextResponse.json({
-      token,
+    const response = ok({
       user: {
         id: user.id,
         email: user.email,
@@ -63,8 +63,9 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 });
+      const details = fromZodError(err);
+      return apiError(details[0]?.message ?? "Validation failed", 400, details);
     }
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    return apiError("Error interno", 500);
   }
 }

@@ -43,8 +43,8 @@ export async function POST(
 
     if (result.emailJob) {
       const job = result.emailJob;
-      after(() => {
-        void runContactEmailJob(job);
+      after(async () => {
+        await runContactEmailJob(job);
       });
     }
 

@@ -1,53 +1,35 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
-import { UserRole, SystemModule, AuditAction } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import { UserRole } from "@prisma/client";
 import { getSession, requireRole, AuthError } from "@/lib/auth/session";
-import { writeAuditLog } from "@/lib/audit";
+import { ok, apiError, fromZodError } from "@/lib/api/response";
+import {
+  getProviderCatalog,
+  upsertProviderProduct,
+  ProductActivationError,
+} from "@/lib/services/product.service";
+import { ProviderNotFoundError } from "@/lib/services/provider.service";
 
 const toggleSchema = z.object({
   productId: z.string(),
   isAvailable: z.boolean(),
-  price: z.number().positive().optional(),
+  price: z.number().min(0, "El precio debe ser mayor o igual a 0").optional(),
 });
 
-/** Proveedor: activar/inactivar productos del catálogo global */
+/** Proveedor: catálogo global con estado ProviderProduct */
 export async function GET(request: NextRequest) {
   try {
     const session = requireRole(getSession(request), UserRole.PROVIDER);
-
-    const provider = await prisma.provider.findUnique({ where: { userId: session.sub } });
-    if (!provider) {
-      return NextResponse.json({ error: "Perfil de proveedor no encontrado" }, { status: 404 });
-    }
-
-    const allProducts = await prisma.product.findMany({
-      where: { isActive: true },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
-    });
-
-    const providerProducts = await prisma.providerProduct.findMany({
-      where: { providerId: provider.id },
-    });
-
-    const ppMap = new Map(providerProducts.map((pp) => [pp.productId, pp]));
-
-    const catalog = allProducts.map((product) => {
-      const pp = ppMap.get(product.id);
-      return {
-        product,
-        price: pp ? Number(pp.price) : null,
-        isAvailable: pp?.isAvailable ?? false,
-        providerProductId: pp?.id ?? null,
-      };
-    });
-
-    return NextResponse.json({ provider, catalog });
+    const catalog = await getProviderCatalog(session.sub);
+    return ok(catalog);
   } catch (err) {
     if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return apiError(err.message, err.status);
     }
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    if (err instanceof ProviderNotFoundError) {
+      return apiError(err.message, 404);
+    }
+    return apiError("Error interno", 500);
   }
 }
 
@@ -56,60 +38,26 @@ export async function PATCH(request: NextRequest) {
     const session = requireRole(getSession(request), UserRole.PROVIDER);
     const body = toggleSchema.parse(await request.json());
 
-    const provider = await prisma.provider.findUnique({ where: { userId: session.sub } });
-    if (!provider) {
-      return NextResponse.json({ error: "Perfil de proveedor no encontrado" }, { status: 404 });
-    }
+    const providerProduct = await upsertProviderProduct(
+      session.sub,
+      body,
+      request.headers.get("x-forwarded-for") ?? undefined
+    );
 
-    const existing = await prisma.providerProduct.findUnique({
-      where: {
-        providerId_productId: { providerId: provider.id, productId: body.productId },
-      },
-    });
-
-    let result;
-    if (existing) {
-      result = await prisma.providerProduct.update({
-        where: { id: existing.id },
-        data: {
-          isAvailable: body.isAvailable,
-          ...(body.price !== undefined ? { price: body.price } : {}),
-        },
-        include: { product: true },
-      });
-    } else if (body.price !== undefined) {
-      result = await prisma.providerProduct.create({
-        data: {
-          providerId: provider.id,
-          productId: body.productId,
-          price: body.price,
-          isAvailable: body.isAvailable,
-        },
-        include: { product: true },
-      });
-    } else {
-      return NextResponse.json(
-        { error: "Debes especificar un precio para activar un producto nuevo" },
-        { status: 400 }
-      );
-    }
-
-    await writeAuditLog({
-      module: SystemModule.PRODUCTS,
-      action: body.isAvailable ? AuditAction.ENABLE : AuditAction.DISABLE,
-      entityId: result.id,
-      userId: session.sub,
-      details: { productId: body.productId, price: body.price },
-    });
-
-    return NextResponse.json({ providerProduct: result });
+    return ok({ providerProduct });
   } catch (err) {
     if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return apiError(err.message, err.status);
+    }
+    if (err instanceof ProviderNotFoundError) {
+      return apiError(err.message, 404);
+    }
+    if (err instanceof ProductActivationError) {
+      return apiError(err.message, 400);
     }
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 });
+      return apiError("Validation failed", 400, fromZodError(err));
     }
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    return apiError("Error interno", 500);
   }
 }

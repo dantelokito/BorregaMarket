@@ -2,6 +2,7 @@ import { Prisma, SystemModule, AuditAction } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { buildMeta } from "@/lib/services/pagination";
+import { toUnitOfMeasure } from "@/lib/orders/labels";
 import {
   createProviderSchema,
   type CreateProviderInput,
@@ -208,7 +209,7 @@ export async function getProviderDetail(id: string) {
     where: { id, isActive: true },
     include: {
       providerProducts: {
-        where: { isAvailable: true, product: { isActive: true } },
+        where: { product: { isActive: true } },
         include: { product: true },
         orderBy: [{ product: { category: "asc" } }, { product: { name: "asc" } }],
       },
@@ -235,11 +236,13 @@ export async function getProviderDetail(id: string) {
     reviewCount: provider.reviewCount,
     isVerified: provider.isVerified,
     products: provider.providerProducts.map((pp) => ({
+      providerProductId: pp.id,
       productId: pp.product.id,
       name: pp.product.name,
       slug: pp.product.slug,
       category: pp.product.category,
       unit: pp.product.unit,
+      unitOfMeasure: toUnitOfMeasure(pp.product.unit),
       price: Number(pp.price),
       isAvailable: pp.isAvailable,
       imageUrl: pp.product.imageUrl,
@@ -267,16 +270,22 @@ export async function listAdminProviders(
   ]);
 
   return {
-    data: providers.map((p) => ({
-      id: p.id,
-      businessName: p.businessName,
-      city: p.city,
-      phone: p.phone,
-      isVerified: p.isVerified,
-      isActive: p.isActive,
-      userEmail: p.user.email,
-      createdAt: p.createdAt.toISOString(),
-    })),
+    data: providers.map((p) => {
+      const userEmail = p.user.email?.trim() ?? "";
+      const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail);
+      return {
+        id: p.id,
+        businessName: p.businessName,
+        city: p.city,
+        phone: p.phone,
+        isVerified: p.isVerified,
+        isActive: p.isActive,
+        userEmail,
+        /** US-NOTIFY-04: badge admin cuando el negocio no puede recibir email */
+        hasValidEmail,
+        createdAt: p.createdAt.toISOString(),
+      };
+    }),
     meta: buildMeta(pagination.page, pagination.limit, total),
   };
 }

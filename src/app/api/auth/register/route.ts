@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { UserRole, SystemModule, AuditAction } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth/password";
 import { signToken, TOKEN_COOKIE } from "@/lib/auth/token";
 import { writeAuditLog } from "@/lib/audit";
+import { ok, apiError, fromZodError } from "@/lib/api/response";
 
 const registerSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     const exists = await prisma.user.findUnique({ where: { email: data.email } });
     if (exists) {
-      return NextResponse.json({ error: "El email ya está registrado" }, { status: 409 });
+      return apiError("El email ya está registrado", 409);
     }
 
     const passwordHash = await hashPassword(data.password);
@@ -50,12 +51,9 @@ export async function POST(request: NextRequest) {
       name: user.name,
     });
 
-    const response = NextResponse.json(
-      {
-        token,
-        user: { id: user.id, email: user.email, name: user.name, role: user.role },
-      },
-      { status: 201 }
+    const response = ok(
+      { user: { id: user.id, email: user.email, name: user.name, role: user.role } },
+      201
     );
 
     response.cookies.set(TOKEN_COOKIE, token, {
@@ -69,8 +67,9 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 });
+      const details = fromZodError(err);
+      return apiError("Validation failed", 400, details);
     }
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    return apiError("Error interno", 500);
   }
 }

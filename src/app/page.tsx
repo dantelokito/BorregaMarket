@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { Header } from "@/components/layout/Header";
+import { HeaderWrapper } from "@/components/layout/HeaderWrapper";
 import { ArrowRight, MapPin, Shield, Store } from "lucide-react";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen">
-      <Header />
+      <HeaderWrapper />
 
       {/* Hero */}
       <section className="relative bg-gradient-to-br from-orange-50 via-white to-green-50 px-6 py-20 lg:py-32">

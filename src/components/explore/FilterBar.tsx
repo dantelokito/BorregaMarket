@@ -9,19 +9,24 @@ interface FilterBarProps {
 
 export function FilterBar({ activeFilters, onToggle }: FilterBarProps) {
   return (
-    <div className="border-b border-gray-200 bg-white sticky top-[80px] z-40">
-      <div className="max-w-[1760px] mx-auto px-6 py-3">
+    <div className="sticky top-[80px] z-40 border-b border-gray-200 bg-white">
+      <div className="mx-auto max-w-[1760px] px-6 py-3">
         <div className="filter-scroll flex gap-2 overflow-x-auto pb-1">
           {FILTER_CHIPS.map((chip) => {
             const active = activeFilters.includes(chip.id);
+            const disabled = "disabled" in chip && chip.disabled;
             return (
               <button
                 key={chip.id}
-                onClick={() => onToggle(chip.id)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full border text-sm whitespace-nowrap transition-all ${
-                  active
-                    ? "bg-gray-900 text-white border-gray-900"
-                    : "border-gray-300 hover:border-gray-900 hover:bg-gray-50"
+                onClick={() => !disabled && onToggle(chip.id)}
+                disabled={disabled}
+                aria-pressed={active}
+                className={`flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[var(--brand)] ${
+                  disabled
+                    ? "cursor-not-allowed border-gray-200 text-gray-400 opacity-60"
+                    : active
+                      ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)]"
+                      : "border-gray-300 hover:border-gray-900 hover:bg-gray-50"
                 }`}
               >
                 <span>{chip.icon}</span>

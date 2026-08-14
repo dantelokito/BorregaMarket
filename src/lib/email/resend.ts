@@ -53,15 +53,17 @@ async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Envía email de contacto vía Resend (≤3 intentos).
- * Sin RESEND_API_KEY: no-op + reason email_disabled.
- * No incluye PII del cliente.
- */
-export async function sendContactNotification(
-  payload: ContactEmailPayload
-): Promise<{ ok: boolean; reason?: "email_disabled" | "send_failed" | "no_email" }> {
-  if (!payload.to?.trim()) {
+type EmailSendResult = {
+  ok: boolean;
+  reason?: "email_disabled" | "send_failed" | "no_email";
+};
+
+async function sendHtmlEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<EmailSendResult> {
+  if (!params.to?.trim()) {
     return { ok: false, reason: "no_email" };
   }
 
@@ -72,8 +74,6 @@ export async function sendContactNotification(
   }
 
   const resend = new Resend(apiKey);
-  const html = buildContactHtml(payload);
-  const subject = `Contacto — ${payload.businessName}`;
   const delays = [0, 1000, 2000];
 
   for (let attempt = 0; attempt < delays.length; attempt++) {
@@ -81,9 +81,9 @@ export async function sendContactNotification(
     try {
       const result = await resend.emails.send({
         from,
-        to: payload.to,
-        subject,
-        html,
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
       });
       if (result.error) {
         continue;
@@ -95,6 +95,74 @@ export async function sendContactNotification(
   }
 
   return { ok: false, reason: "send_failed" };
+}
+
+/**
+ * Envía email de contacto vía Resend (≤3 intentos).
+ * Sin RESEND_API_KEY: no-op + reason email_disabled.
+ * No incluye PII del cliente.
+ */
+export async function sendContactNotification(
+  payload: ContactEmailPayload
+): Promise<EmailSendResult> {
+  return sendHtmlEmail({
+    to: payload.to,
+    subject: `Contacto — ${payload.businessName}`,
+    html: buildContactHtml(payload),
+  });
+}
+
+export interface NewOrderEmailPayload {
+  to: string;
+  businessName: string;
+  clientName: string;
+  clientPhone?: string | null;
+  total: string;
+  items: Array<{ itemName: string; quantity: string; unitOfMeasure: string }>;
+}
+
+function buildNewOrderHtml(payload: NewOrderEmailPayload): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:8080";
+  const panelUrl = `${appUrl.replace(/\/$/, "")}/proveedor`;
+  const lines = payload.items
+    .map(
+      (item) =>
+        `<li>${escapeHtml(item.itemName)} — ${escapeHtml(item.quantity)} ${escapeHtml(item.unitOfMeasure)}</li>`
+    )
+    .join("");
+  const phone = payload.clientPhone
+    ? `<p><strong>Teléfono:</strong> ${escapeHtml(payload.clientPhone)}</p>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Nuevo pedido — La Borrega Market</title></head>
+<body style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#1a1a1a;max-width:560px;margin:0 auto;padding:24px;">
+  <h1 style="font-size:20px;margin:0 0 16px;">Nuevo pedido</h1>
+  <p>Hola, <strong>${escapeHtml(payload.businessName)}</strong> tiene un pedido nuevo para recoger.</p>
+  <p><strong>Cliente:</strong> ${escapeHtml(payload.clientName)}</p>
+  ${phone}
+  <p><strong>Total:</strong> $${escapeHtml(payload.total)}</p>
+  <p><strong>Productos:</strong></p>
+  <ul>${lines}</ul>
+  <p style="margin-top:24px;">
+    <a href="${escapeHtml(panelUrl)}" style="display:inline-block;background:#166534;color:#fff;text-decoration:none;padding:10px 16px;border-radius:6px;">
+      Abrir panel de proveedor
+    </a>
+  </p>
+  <p style="font-size:12px;color:#666;margin-top:32px;">La Borrega Market — notificación automática</p>
+</body>
+</html>`;
+}
+
+export async function sendNewOrderEmail(
+  payload: NewOrderEmailPayload
+): Promise<EmailSendResult> {
+  return sendHtmlEmail({
+    to: payload.to,
+    subject: `Nuevo pedido — ${payload.businessName}`,
+    html: buildNewOrderHtml(payload),
+  });
 }
 
 export async function recordContactNotificationFailure(params: {

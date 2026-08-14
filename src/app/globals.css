@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
 :root {
   --brand: #e23744;
@@ -45,4 +46,26 @@ body {
   color: white;
   border-color: #222;
   transform: scale(1.05);
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #pos-ticket,
+  #pos-ticket * {
+    visibility: visible;
+  }
+  #pos-ticket {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-bar {
+    transition: none !important;
+  }
 }

@@ -96,7 +96,9 @@ export async function registerContact(
 
   const timestampIso = new Date().toISOString();
   const ownerEmail = provider.user.email?.trim() ?? "";
+  const hasValidOwnerEmail = isValidEmail(ownerEmail);
 
+  // US-NOTIFY-04 / API-NOTIFY-01: sin email válido → AUDIT notificationFailed, sin error al cliente
   await writeAuditLog({
     module: SystemModule.PROVIDERS,
     action: AuditAction.CONTACT,
@@ -108,26 +110,32 @@ export async function registerContact(
       productIds,
       productNames,
       rateLimited: false,
-      notificationFailed: false,
-      reason: null,
+      notificationFailed: !hasValidOwnerEmail,
+      reason: hasValidOwnerEmail ? null : "no_email",
     },
   });
 
   return {
     notified: true,
     message: "Frutería notificada",
-    emailJob: {
-      to: ownerEmail,
-      businessName: provider.businessName,
-      providerId: provider.id,
-      productIds,
-      productNames,
-      source: body.source,
-      timestampIso,
-      userId: opts.userId,
-      ipAddress: ip,
-    },
+    emailJob: hasValidOwnerEmail
+      ? {
+          to: ownerEmail,
+          businessName: provider.businessName,
+          providerId: provider.id,
+          productIds,
+          productNames,
+          source: body.source,
+          timestampIso,
+          userId: opts.userId,
+          ipAddress: ip,
+        }
+      : null,
   };
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 export async function runContactEmailJob(

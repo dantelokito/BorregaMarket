@@ -35,7 +35,7 @@ export function assertValidImage(file: {
     return {
       ok: false,
       field: "file",
-      message: "El archivo supera el máximo de 5 MB",
+      message: "El archivo supera el límite de 5MB",
     };
   }
   return { ok: true };
