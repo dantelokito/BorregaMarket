@@ -2,17 +2,14 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { UserRole } from "@prisma/client";
 import { getSession, requireRole, AuthError } from "@/lib/auth/session";
-import { ok, apiError, fromZodError } from "@/lib/api/response";
+import { ok, apiError, fromZodError, handleRouteError } from "@/lib/api/response";
+import { patchAdminProviderSchema } from "@/lib/validators/provider-settings";
 import {
-  updateProviderVerification,
+  updateAdminProvider,
   ProviderNotFoundError,
 } from "@/lib/services/provider.service";
 
-const verifySchema = z.object({
-  isVerified: z.boolean(),
-});
-
-/** Admin: verificar o desverificar proveedor */
+/** Admin: verificar proveedor y/o par de marca (F5). */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -20,14 +17,14 @@ export async function PATCH(
   try {
     const session = requireRole(getSession(request), UserRole.ADMIN);
     const { id } = await params;
-    const body = verifySchema.parse(await request.json());
+    const body = patchAdminProviderSchema.parse(await request.json());
 
-    const updated = await updateProviderVerification(
+    const updated = await updateAdminProvider({
       id,
-      body.isVerified,
-      session.sub,
-      request.headers.get("x-forwarded-for") ?? undefined
-    );
+      input: body,
+      adminUserId: session.sub,
+      ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
+    });
 
     return ok(updated);
   } catch (err) {
@@ -40,6 +37,6 @@ export async function PATCH(
     if (err instanceof z.ZodError) {
       return apiError("Validation failed", 400, fromZodError(err));
     }
-    return apiError("Error interno", 500);
+    return handleRouteError(err);
   }
 }

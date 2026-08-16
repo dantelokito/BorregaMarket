@@ -65,18 +65,24 @@ export function CartPageClient() {
       const available = new Set(
         data.products.filter((p) => p.isAvailable).map((p) => p.providerProductId)
       );
-      const missing = new Set(
-        cart.items
-          .filter((i) => !available.has(i.providerProductId))
-          .map((i) => i.providerProductId)
-      );
-      setUnavailable(missing);
+      const gone = cart.items.filter((i) => !available.has(i.providerProductId));
+      if (gone.length > 0) {
+        let next = cart;
+        for (const item of gone) {
+          next = setItemQuantity(next, item.providerProductId, 0);
+          showToast(`${item.name} ya no está disponible`);
+        }
+        save(next.items.length ? next : null);
+        setUnavailable(new Set());
+      } else {
+        setUnavailable(new Set());
+      }
     } catch {
       // keep cart; availability check is best-effort
     } finally {
       setChecking(false);
     }
-  }, [cart]);
+  }, [cart, save, showToast]);
 
   useEffect(() => {
     if (!hydrated || !cart) return;
@@ -158,7 +164,7 @@ export function CartPageClient() {
         return;
       }
       if (err instanceof ApiError && err.status === 409) {
-        setSubmitError("Algunos productos ya no están disponibles. Quita los que no se puedan encargar.");
+        setSubmitError(err.message || "Producto no disponible");
         void revalidate();
       } else if (err instanceof ApiError) {
         setSubmitError(err.message || "No pudimos enviar tu pedido");

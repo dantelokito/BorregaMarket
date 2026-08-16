@@ -20,6 +20,18 @@ export interface AuthUser {
   role: "CLIENT" | "PROVIDER" | "ADMIN";
 }
 
+export interface SessionBrand {
+  primaryColor: string;
+  secondaryColor: string;
+  source: "provider";
+}
+
+export interface AuthSession {
+  authenticated: boolean;
+  role: "CLIENT" | "PROVIDER" | "ADMIN" | null;
+  brand: SessionBrand | null;
+}
+
 export interface ProviderListing {
   id: string;
   businessName: string;
@@ -110,6 +122,8 @@ export interface ProviderBusiness {
   googleMapsUrl?: string | null;
   googleReviewsEnabled?: boolean;
   googleReviewsLocked?: boolean;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
 }
 
 export interface CatalogItem {

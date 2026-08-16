@@ -17,7 +17,8 @@ import { MediaUpload } from "@/components/ui/MediaUpload";
 import { SkeletonTable } from "@/components/ui/SkeletonCard";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ToggleLeft, ToggleRight } from "lucide-react";
+import { Check, LoaderCircle, ToggleLeft, ToggleRight } from "lucide-react";
+import { BrandColorPicker } from "@/components/provider/BrandColorPicker";
 
 export function ProveedorPageClient() {
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
@@ -29,6 +30,8 @@ export function ProveedorPageClient() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [error, setError] = useState("");
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [rowBusy, setRowBusy] = useState<Record<string, boolean>>({});
+  const [rowOk, setRowOk] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     async function load() {
@@ -64,6 +67,7 @@ export function ProveedorPageClient() {
       delete next[productId];
       return next;
     });
+    setRowBusy((prev) => ({ ...prev, [productId]: true }));
 
     try {
       const { data } = await updateProduct({
@@ -72,9 +76,23 @@ export function ProveedorPageClient() {
         price: price ?? 50,
       });
       setCatalog(data.catalog);
+      setRowOk((prev) => ({ ...prev, [productId]: true }));
+      window.setTimeout(() => {
+        setRowOk((prev) => {
+          const next = { ...prev };
+          delete next[productId];
+          return next;
+        });
+      }, 2000);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Error al guardar";
       setRowErrors((prev) => ({ ...prev, [productId]: message }));
+    } finally {
+      setRowBusy((prev) => {
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      });
     }
   }
 
@@ -130,7 +148,6 @@ export function ProveedorPageClient() {
         <OnboardingCTA />
       ) : (
         <>
-          <ProviderSettingsForm />
           <section className="mb-10 space-y-6 rounded-xl border border-gray-200 bg-white p-6">
             <div>
               <h2 className="text-lg font-semibold">Imágenes del negocio</h2>
@@ -167,13 +184,19 @@ export function ProveedorPageClient() {
             </div>
           </section>
 
+          <BrandColorPicker />
+
           {catalog.length === 0 ? (
             <EmptyState
               title="Sin productos en el catálogo"
               description="No hay productos disponibles en el catálogo global. Contacta al administrador."
             />
           ) : (
-            categories.map((cat) => {
+            <>
+              <p className="mb-4 text-sm text-slate-600">
+                Inactivo: no aparece en explorar, pedidos ni POS. No es stock.
+              </p>
+              {categories.map((cat) => {
               const items = catalog.filter((c) => c.product.category === cat);
               if (items.length === 0) return null;
 
@@ -197,38 +220,53 @@ export function ProveedorPageClient() {
                           />
                           {rowErrors[item.product.id] && (
                             <p className="mt-1 text-xs text-red-600" role="alert">
-                              {rowErrors[item.product.id]}
+                              {rowErrors[item.product.id]}{" "}
+                              <button
+                                type="button"
+                                className="underline"
+                                onClick={() =>
+                                  toggleProduct(item.product.id, item.isAvailable, item.price)
+                                }
+                              >
+                                Reintentar
+                              </button>
                             </p>
                           )}
                         </div>
                         <button
+                          type="button"
                           onClick={() =>
                             toggleProduct(item.product.id, item.isAvailable, item.price)
                           }
-                          aria-label={`${item.isAvailable ? "Desactivar" : "Activar"} ${item.product.name}`}
-                          className={`flex min-h-[44px] min-w-[44px] items-center gap-2 self-start rounded-full px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--brand)] sm:self-center ${
+                          disabled={rowBusy[item.product.id]}
+                          aria-label={`${item.product.name}: ${item.isAvailable ? "Activo" : "Inactivo"}`}
+                          aria-pressed={item.isAvailable}
+                          className={`flex min-h-[44px] min-w-[44px] items-center gap-2 self-start rounded-full px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--brand)] disabled:opacity-60 sm:self-center ${
                             item.isAvailable
                               ? "bg-green-100 text-green-700"
                               : "bg-gray-100 text-gray-500"
                           }`}
                         >
-                          {item.isAvailable ? (
-                            <>
-                              <ToggleRight size={18} /> Activo
-                            </>
+                          {rowBusy[item.product.id] ? (
+                            <LoaderCircle size={18} className="animate-spin" aria-hidden />
+                          ) : rowOk[item.product.id] ? (
+                            <Check size={18} aria-hidden />
+                          ) : item.isAvailable ? (
+                            <ToggleRight size={18} aria-hidden />
                           ) : (
-                            <>
-                              <ToggleLeft size={18} /> Inactivo
-                            </>
+                            <ToggleLeft size={18} aria-hidden />
                           )}
+                          {item.isAvailable ? "Activo" : "Inactivo"}
                         </button>
                       </div>
                     ))}
                   </div>
                 </div>
               );
-            })
+            })}
+            </>
           )}
+          <ProviderSettingsForm />
         </>
       )}
     </div>

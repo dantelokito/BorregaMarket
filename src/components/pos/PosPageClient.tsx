@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Search, Zap } from "lucide-react";
 import { getMyProducts } from "@/lib/api/provider-panel";
 import { createPosSale } from "@/lib/api/provider-ops";
@@ -207,7 +208,10 @@ export function PosPageClient() {
       setActiveLineKey(null);
       setEditing(null);
     } catch (err) {
-      if (err instanceof ApiError) setChargeError(err.message || "No pudimos cobrar la venta");
+      if (err instanceof ApiError && err.status === 409) {
+        setChargeError("Ese producto ya no está a la venta");
+        void load();
+      } else if (err instanceof ApiError) setChargeError(err.message || "No pudimos cobrar la venta");
       else setChargeError("No pudimos cobrar la venta");
     } finally {
       setCharging(false);
@@ -300,9 +304,22 @@ export function PosPageClient() {
               <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-200" />
             ))}
           </div>
+        ) : !query && available.length === 0 ? (
+          <EmptyState
+            title="No hay productos activos"
+            description="Activa al menos uno en Catálogo para vender."
+            action={
+              <Link
+                href="/proveedor"
+                className="inline-flex min-h-11 items-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold"
+              >
+                Ir a Catálogo
+              </Link>
+            }
+          />
         ) : filtered.length === 0 ? (
           <EmptyState
-            title={query ? "Sin resultados" : "No hay productos activos"}
+            title="Sin resultados"
             description="Agrega una línea libre al ticket."
             action={
               <Button type="button" onClick={() => setQuickOpen(true)}>

@@ -1,7 +1,12 @@
 "use client";
 
 import { ToastProvider } from "@/components/ui/Toast";
+import { SessionThemeProvider } from "@/components/providers/SessionThemeProvider";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
-  return <ToastProvider>{children}</ToastProvider>;
+  return (
+    <SessionThemeProvider>
+      <ToastProvider>{children}</ToastProvider>
+    </SessionThemeProvider>
+  );
 }

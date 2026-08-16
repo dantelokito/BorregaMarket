@@ -154,6 +154,8 @@ model Provider {
   googlePlaceId          String?  @map("google_place_id")
   googleMapsUrl          String?  @map("google_maps_url")
   googleReviewsEnabled   Boolean  @default(false) @map("google_reviews_enabled")
+  primaryColor           String?  @map("primary_color")
+  secondaryColor         String?  @map("secondary_color")
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 

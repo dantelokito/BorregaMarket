@@ -47,8 +47,12 @@ describe("formatAuthorName", () => {
 });
 
 describe("bodyTouchesGoogle", () => {
-  it("detects Google fields even if values match current", () => {
-    expect(bodyTouchesGoogle({ googleReviewsEnabled: false })).toBe(true);
-    expect(bodyTouchesGoogle({ preparationTimeMinutes: 25 })).toBe(false);
+  it("does not treat brand colors as Google fields", () => {
+    expect(
+      bodyTouchesGoogle({
+        primaryColor: "#1B5E20",
+        secondaryColor: "#0D47A1",
+      })
+    ).toBe(false);
   });
 });

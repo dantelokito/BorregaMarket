@@ -104,10 +104,12 @@ export async function getProviderDashboard(params: {
         COALESCE(SUM(oi.quantity), 0) AS quantity_sum
       FROM order_items oi
       INNER JOIN orders o ON o.id = oi.order_id
+      LEFT JOIN provider_products pp ON pp.id = oi.provider_product_id
       WHERE o.provider_id = ${provider.id}
         AND o.status <> 'CANCELLED'::"OrderStatus"
         AND o.created_at >= ${d30.start}
         AND o.created_at < ${d30.end}
+        AND (oi.provider_product_id IS NULL OR pp.is_available = true)
       GROUP BY oi.provider_product_id
       ORDER BY SUM(oi.subtotal) DESC
       LIMIT 5

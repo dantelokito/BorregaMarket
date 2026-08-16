@@ -12,7 +12,7 @@ export function RadiusSlider({ value, onChange, disabled }: RadiusSliderProps) {
   const km = Number.isFinite(value) ? value : DEFAULT_RADIUS_KM;
   return (
     <div className="w-full">
-      <label htmlFor="radius-km" className="mb-1 block text-sm font-medium text-slate-700">
+      <label htmlFor="radius-km" className="mb-1 block text-sm font-medium text-slate-600">
         Radio: {km} km
       </label>
       <input
@@ -30,7 +30,7 @@ export function RadiusSlider({ value, onChange, disabled }: RadiusSliderProps) {
         aria-valuetext={`${km} kilómetros`}
         className="h-11 w-full accent-[var(--brand)]"
       />
-      <div className="flex justify-between text-xs text-slate-400">
+      <div className="flex justify-between text-xs text-slate-500">
         <span>{MIN_RADIUS_KM} km</span>
         <span>{MAX_RADIUS_KM} km</span>
       </div>

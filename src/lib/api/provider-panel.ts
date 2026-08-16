@@ -11,6 +11,8 @@ export interface PatchProviderSettingsInput {
   googlePlaceId?: string | null;
   googleMapsUrl?: string | null;
   googleReviewsEnabled?: boolean;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
 }
 
 export async function updateProviderSettings(input: PatchProviderSettingsInput) {

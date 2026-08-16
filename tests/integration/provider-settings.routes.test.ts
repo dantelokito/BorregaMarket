@@ -96,4 +96,46 @@ describe("provider settings routes", () => {
     const body = await res.json();
     expect(body.error).toBe("Requiere verificación de tu negocio");
   });
+
+  it("PATCH colors-only returns 200 without Google lock", async () => {
+    getSession.mockReturnValue({
+      sub: "u2",
+      role: UserRole.PROVIDER,
+      email: "p@test.com",
+      name: "Carlos",
+    });
+    updateProviderSettings.mockResolvedValue({
+      id: "p1",
+      businessName: "El Paraíso",
+      primaryColor: "#1B5E20",
+      secondaryColor: "#0D47A1",
+      googleReviewsLocked: true,
+    });
+    const res = await PATCH(
+      jsonRequest("/api/provider/me", {
+        method: "PATCH",
+        body: { primaryColor: "#1B5E20", secondaryColor: "#0D47A1" },
+      })
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.primaryColor).toBe("#1B5E20");
+  });
+
+  it("PATCH incomplete color pair returns 400", async () => {
+    getSession.mockReturnValue({
+      sub: "u2",
+      role: UserRole.PROVIDER,
+      email: "p@test.com",
+      name: "Carlos",
+    });
+    const res = await PATCH(
+      jsonRequest("/api/provider/me", {
+        method: "PATCH",
+        body: { primaryColor: "#1B5E20" },
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(updateProviderSettings).not.toHaveBeenCalled();
+  });
 });

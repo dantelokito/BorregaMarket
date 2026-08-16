@@ -11,9 +11,12 @@ import {
   type CreateProviderInput,
 } from "@/lib/validators/provider";
 import {
+  bodyTouchesBrand,
   bodyTouchesGoogle,
+  type PatchAdminProviderInput,
   type PatchProviderSettingsInput,
 } from "@/lib/validators/provider-settings";
+import { canonicalizeHex } from "@/lib/color/contrast";
 
 export class ProviderConflictError extends Error {
   constructor(message = "Ya tienes un negocio registrado") {
@@ -203,13 +206,19 @@ export async function createProvider(
   return provider;
 }
 
+/** Canales públicos: vendible = isAvailable + Product.isActive (ADR-022). */
+export const sellableProviderProductWhere = {
+  isAvailable: true,
+  product: { isActive: true },
+} as const;
+
 const providerCardInclude = {
   providerProducts: {
-    where: { isAvailable: true },
+    where: sellableProviderProductWhere,
     include: { product: true },
     take: 5,
   },
-  _count: { select: { providerProducts: { where: { isAvailable: true } } } },
+  _count: { select: { providerProducts: { where: sellableProviderProductWhere } } },
 } as const;
 
 export async function listProviders(
@@ -274,7 +283,7 @@ export async function getProviderDetail(id: string) {
     where: { id, isActive: true },
     include: {
       providerProducts: {
-        where: { product: { isActive: true } },
+        where: sellableProviderProductWhere,
         include: { product: true },
         orderBy: [{ product: { category: "asc" } }, { product: { name: "asc" } }],
       },
@@ -358,38 +367,80 @@ export async function listAdminProviders(
   };
 }
 
+export async function updateAdminProvider(params: {
+  id: string;
+  adminUserId: string;
+  input: PatchAdminProviderInput;
+  ipAddress?: string;
+}) {
+  const provider = await prisma.provider.findUnique({ where: { id: params.id } });
+  if (!provider) {
+    throw new ProviderNotFoundError("Proveedor no encontrado");
+  }
+
+  const brandData = bodyTouchesBrand(params.input)
+    ? {
+        primaryColor:
+          params.input.primaryColor === null
+            ? null
+            : canonicalizeHex(params.input.primaryColor as string),
+        secondaryColor:
+          params.input.secondaryColor === null
+            ? null
+            : canonicalizeHex(params.input.secondaryColor as string),
+      }
+    : {};
+
+  const updated = await prisma.provider.update({
+    where: { id: params.id },
+    data: {
+      ...(params.input.isVerified !== undefined ? { isVerified: params.input.isVerified } : {}),
+      ...(params.input.isVerified === false ? { googleReviewsEnabled: false } : {}),
+      ...brandData,
+    },
+    select: {
+      id: true,
+      businessName: true,
+      isVerified: true,
+      googleReviewsEnabled: true,
+      primaryColor: true,
+      secondaryColor: true,
+    },
+  });
+
+  await writeAuditLog({
+    module: SystemModule.PROVIDERS,
+    action: AuditAction.UPDATE,
+    entityId: params.id,
+    userId: params.adminUserId,
+    ipAddress: params.ipAddress,
+    details: {
+      ...(params.input.isVerified !== undefined ? { isVerified: params.input.isVerified } : {}),
+      googleReviewsEnabled: updated.googleReviewsEnabled,
+      ...(bodyTouchesBrand(params.input)
+        ? {
+            primaryColor: updated.primaryColor,
+            secondaryColor: updated.secondaryColor,
+          }
+        : {}),
+    },
+  });
+
+  return updated;
+}
+
 export async function updateProviderVerification(
   id: string,
   isVerified: boolean,
   adminUserId: string,
   ipAddress?: string
 ) {
-  const provider = await prisma.provider.findUnique({ where: { id } });
-  if (!provider) {
-    throw new ProviderNotFoundError("Proveedor no encontrado");
-  }
-
-  const updated = await prisma.$transaction(async (tx) => {
-    return tx.provider.update({
-      where: { id },
-      data: {
-        isVerified,
-        ...(isVerified === false ? { googleReviewsEnabled: false } : {}),
-      },
-      select: { id: true, businessName: true, isVerified: true, googleReviewsEnabled: true },
-    });
-  });
-
-  await writeAuditLog({
-    module: SystemModule.PROVIDERS,
-    action: AuditAction.UPDATE,
-    entityId: id,
-    userId: adminUserId,
+  return updateAdminProvider({
+    id,
+    adminUserId,
     ipAddress,
-    details: { isVerified, googleReviewsEnabled: updated.googleReviewsEnabled },
+    input: { isVerified },
   });
-
-  return updated;
 }
 
 function serializeProviderSettings(provider: {
@@ -410,6 +461,8 @@ function serializeProviderSettings(provider: {
   googlePlaceId: string | null;
   googleMapsUrl: string | null;
   googleReviewsEnabled: boolean;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
 }) {
   return {
     id: provider.id,
@@ -430,6 +483,8 @@ function serializeProviderSettings(provider: {
     googleMapsUrl: provider.googleMapsUrl,
     googleReviewsEnabled: provider.googleReviewsEnabled,
     googleReviewsLocked: !provider.isVerified,
+    primaryColor: provider.primaryColor ?? null,
+    secondaryColor: provider.secondaryColor ?? null,
   };
 }
 
@@ -473,6 +528,19 @@ export async function updateProviderSettings(params: {
     ]);
   }
 
+  const brandData = bodyTouchesBrand(params.input)
+    ? {
+        primaryColor:
+          params.input.primaryColor === null
+            ? null
+            : canonicalizeHex(params.input.primaryColor as string),
+        secondaryColor:
+          params.input.secondaryColor === null
+            ? null
+            : canonicalizeHex(params.input.secondaryColor as string),
+      }
+    : {};
+
   const updated = await prisma.provider.update({
     where: { id: provider.id },
     data: {
@@ -491,6 +559,7 @@ export async function updateProviderSettings(params: {
       ...(params.input.googleReviewsEnabled !== undefined
         ? { googleReviewsEnabled: params.input.googleReviewsEnabled }
         : {}),
+      ...brandData,
     },
   });
 
@@ -504,6 +573,12 @@ export async function updateProviderSettings(params: {
       preparationTimeMinutes: updated.preparationTimeMinutes,
       offersDelivery: updated.offersDelivery,
       googleReviewsEnabled: updated.googleReviewsEnabled,
+      ...(bodyTouchesBrand(params.input)
+        ? {
+            primaryColor: updated.primaryColor,
+            secondaryColor: updated.secondaryColor,
+          }
+        : {}),
     },
   });
 

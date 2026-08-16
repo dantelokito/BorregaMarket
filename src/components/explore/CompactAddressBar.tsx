@@ -1,19 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { LocateFixed, Search } from "lucide-react";
-import { RadiusSlider } from "./RadiusSlider";
+import { Search } from "lucide-react";
 import { FavoriteAddressSelect } from "./FavoriteAddressSelect";
 import type { UserAddress } from "@/lib/api/types";
 import { MONTERREY_CENTER } from "@/lib/maps/constants";
 
-interface LocationBarProps {
-  radiusKm: number;
-  onRadiusChange: (km: number) => void;
+interface CompactAddressBarProps {
   hasPin: boolean;
   pinLabel?: string;
-  onUseMyLocation: () => void;
-  locating: boolean;
+  radiusKm: number;
   geoDenied: boolean;
   onSearchAddress: (query: string) => Promise<void>;
   addresses: UserAddress[];
@@ -24,13 +20,10 @@ interface LocationBarProps {
   guest: boolean;
 }
 
-export function LocationBar({
-  radiusKm,
-  onRadiusChange,
+export function CompactAddressBar({
   hasPin,
   pinLabel,
-  onUseMyLocation,
-  locating,
+  radiusKm,
   geoDenied,
   onSearchAddress,
   addresses,
@@ -39,7 +32,7 @@ export function LocationBar({
   onSaveAddress,
   canSave,
   guest,
-}: LocationBarProps) {
+}: CompactAddressBarProps) {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -65,15 +58,6 @@ export function LocationBar({
   return (
     <section className="space-y-3 border-b border-gray-100 bg-white px-6 py-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-        <button
-          type="button"
-          onClick={onUseMyLocation}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-        >
-          <LocateFixed size={16} aria-hidden />
-          {locating ? "Obteniendo ubicación…" : "Usar mi ubicación"}
-        </button>
-
         <form onSubmit={submitSearch} className="flex min-w-0 flex-1 gap-2">
           <label htmlFor="geocode-query" className="sr-only">
             Buscar dirección
@@ -114,12 +98,10 @@ export function LocationBar({
       )}
       {geoDenied && (
         <p className="text-sm text-slate-600">
-          Activa la ubicación o busca una dirección. El mapa se centra en Monterrey (
+          Busca una dirección o usa una favorita. El mapa se centra en Monterrey (
           {MONTERREY_CENTER.lat.toFixed(2)}, {MONTERREY_CENTER.lng.toFixed(2)}).
         </p>
       )}
-
-      <RadiusSlider value={radiusKm} onChange={onRadiusChange} />
 
       <p className="text-sm text-slate-600">
         {hasPin

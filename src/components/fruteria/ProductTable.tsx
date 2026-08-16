@@ -59,7 +59,9 @@ export function ProductTable({
   quantities = {},
   onQuantityChange,
 }: ProductTableProps) {
-  if (products.length === 0) {
+  const visible = products.filter((p) => p.isAvailable);
+
+  if (visible.length === 0) {
     return (
       <EmptyState
         title="Sin productos publicados aún"
@@ -91,7 +93,7 @@ export function ProductTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {products.map((product) => (
+            {visible.map((product) => (
               <ProductRow
                 key={product.providerProductId}
                 product={product}
@@ -103,7 +105,7 @@ export function ProductTable({
           </tbody>
         </table>
         <ul className="divide-y divide-gray-100 sm:hidden">
-          {products.map((product) => (
+          {visible.map((product) => (
             <li key={product.providerProductId} className="p-4">
               <ProductRow
                 product={product}
@@ -130,25 +132,20 @@ function ProductRow({
   onQuantityChange?: (product: ProviderProduct, quantity: number) => void;
   layout: "table" | "card";
 }) {
-  const unavailable = !product.isAvailable;
   const uom = product.unitOfMeasure as UnitOfMeasure;
 
   const stepper = onQuantityChange ? (
-    unavailable ? (
-      <span className="text-sm text-slate-500">No disponible</span>
-    ) : (
-      <QuantityStepper
-        value={quantity}
-        onChange={(n) => onQuantityChange(product, n)}
-        productName={product.name}
-        unitOfMeasure={uom}
-      />
-    )
+    <QuantityStepper
+      value={quantity}
+      onChange={(n) => onQuantityChange(product, n)}
+      productName={product.name}
+      unitOfMeasure={uom}
+    />
   ) : null;
 
   if (layout === "card") {
     return (
-      <div className={unavailable ? "opacity-60" : ""}>
+      <div>
         <div className="flex items-center gap-3">
           <ProductThumb product={product} />
           <div className="min-w-0 flex-1">
@@ -167,7 +164,7 @@ function ProductRow({
   }
 
   return (
-    <tr className={`bg-white ${unavailable ? "opacity-60" : ""}`}>
+    <tr className="bg-white">
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           <ProductThumb product={product} />

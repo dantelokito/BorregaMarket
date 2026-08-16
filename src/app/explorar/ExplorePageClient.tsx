@@ -1,29 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
+import dynamic from "next/dynamic";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useMapsLibrary } from "@vis.gl/react-google-maps";
 import { FilterBar } from "@/components/explore/FilterBar";
 import { ProviderCard } from "@/components/explore/ProviderCard";
-import { ExploreMap } from "@/components/explore/ExploreMap";
-import { LocationBar } from "@/components/explore/LocationBar";
+import { CompactAddressBar } from "@/components/explore/CompactAddressBar";
+import { RadiusSlider } from "@/components/explore/RadiusSlider";
 import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Button } from "@/components/ui/Button";
 import { getProviders, clampRadiusKm, type ProviderCategory } from "@/lib/api/providers";
 import { createAddress, listMyAddresses } from "@/lib/api/addresses";
+import { geocodeAddress } from "@/lib/maps/nominatim";
 import { ApiError } from "@/lib/api/client";
 import type { ProviderListing, UserAddress } from "@/lib/api/types";
 import { CHIP_TO_CATEGORY } from "@/types";
 import {
   DEFAULT_RADIUS_KM,
   MAX_RADIUS_KM,
-  getGoogleMapsApiKey,
   readExplorePin,
   writeExplorePin,
 } from "@/lib/maps/constants";
-import { GoogleMapsProvider } from "@/components/maps/GoogleMapsProvider";
+import type { MapBounds } from "@/components/explore/ExploreMap";
+
+const ExploreMap = dynamic(
+  () => import("@/components/explore/ExploreMap").then((m) => m.ExploreMap),
+  { ssr: false }
+);
 
 function ExploreMapSection({
   providers,
@@ -34,6 +39,10 @@ function ExploreMapSection({
   pin,
   radiusKm,
   onPinChange,
+  tilesDown,
+  onTilesError,
+  onViewportChange,
+  onRadiusChange,
 }: {
   providers: ProviderListing[];
   hoveredId: string | null;
@@ -43,22 +52,39 @@ function ExploreMapSection({
   pin: { lat: number; lng: number } | null;
   radiusKm: number;
   onPinChange: (lat: number, lng: number) => void;
+  tilesDown: boolean;
+  onTilesError: (down: boolean) => void;
+  onViewportChange: (bounds: MapBounds) => void;
+  onRadiusChange: (km: number) => void;
 }) {
-  if (loading) {
-    return <div className={`animate-pulse bg-gray-200 ${className}`} />;
-  }
-
   return (
-    <div className={className}>
-      <ExploreMap
-        providers={providers}
-        hoveredId={hoveredId}
-        onMarkerHover={setHoveredId}
-        onMarkerLeave={() => setHoveredId(null)}
-        pin={pin}
-        radiusKm={radiusKm}
-        onPinChange={onPinChange}
-      />
+    <div className={`relative ${className}`}>
+      {loading ? (
+        <div className="h-full w-full animate-pulse bg-gray-200" />
+      ) : (
+        <ExploreMap
+          providers={providers}
+          hoveredId={hoveredId}
+          onMarkerHover={setHoveredId}
+          onMarkerLeave={() => setHoveredId(null)}
+          pin={pin}
+          radiusKm={radiusKm}
+          onPinChange={onPinChange}
+          onTilesError={onTilesError}
+          onViewportChange={onViewportChange}
+        />
+      )}
+      {tilesDown && (
+        <p
+          className="absolute left-2 right-2 top-2 z-[1000] rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-700 shadow"
+          role="status"
+        >
+          El mapa no cargó; usa la lista
+        </p>
+      )}
+      <div className="absolute inset-x-0 bottom-0 z-[1000] bg-white/95 px-4 pb-2 pt-2">
+        <RadiusSlider value={radiusKm} onChange={onRadiusChange} />
+      </div>
     </div>
   );
 }
@@ -80,37 +106,6 @@ function parseCoord(raw: string | null): number | null {
   if (raw == null || raw === "") return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
-}
-
-function GeocodeBridge({
-  onReady,
-}: {
-  onReady: (fn: (q: string) => Promise<{ lat: number; lng: number; formattedAddress: string }>) => void;
-}) {
-  const geocoding = useMapsLibrary("geocoding");
-
-  useEffect(() => {
-    if (!geocoding) return;
-    const geocoder = new geocoding.Geocoder();
-    onReady(async (q: string) => {
-      const response = await geocoder.geocode({
-        address: q,
-        componentRestrictions: { country: "MX" },
-        bounds: { south: 25.4, west: -100.6, north: 25.9, east: -99.8 },
-      });
-      const first = response.results[0];
-      if (!first?.geometry?.location) {
-        throw new Error("not found");
-      }
-      return {
-        lat: first.geometry.location.lat(),
-        lng: first.geometry.location.lng(),
-        formattedAddress: first.formatted_address,
-      };
-    });
-  }, [geocoding, onReady]);
-
-  return null;
 }
 
 function ExploreContent() {
@@ -145,9 +140,9 @@ function ExploreContent() {
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [guest, setGuest] = useState(false);
-  const [geocodeFn, setGeocodeFn] = useState<
-    ((q: string) => Promise<{ lat: number; lng: number; formattedAddress: string }>) | null
-  >(null);
+  const [tilesDown, setTilesDown] = useState(false);
+  const [viewport, setViewport] = useState<MapBounds | null>(null);
+  const viewportTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchProviders = useCallback(async () => {
     setLoading(true);
@@ -266,9 +261,7 @@ function ExploreContent() {
   }
 
   function clearFilters() {
-    const geo = hasPin
-      ? `lat=${latParam}&lng=${lngParam}&radiusKm=${radiusKm}`
-      : "";
+    const geo = hasPin ? `lat=${latParam}&lng=${lngParam}&radiusKm=${radiusKm}` : "";
     router.push(geo ? `/explorar?${geo}` : "/explorar");
   }
 
@@ -293,10 +286,7 @@ function ExploreContent() {
   }
 
   async function onSearchAddress(query: string) {
-    if (!geocodeFn) {
-      throw new Error("geocoder unavailable");
-    }
-    const result = await geocodeFn(query);
+    const result = await geocodeAddress(query);
     setPin(result);
   }
 
@@ -330,42 +320,66 @@ function ExploreContent() {
     }
   }
 
+  function onViewportChange(bounds: MapBounds) {
+    if (viewportTimer.current) clearTimeout(viewportTimer.current);
+    viewportTimer.current = setTimeout(() => setViewport(bounds), 300);
+  }
+
+  const visibleProviders = useMemo(() => {
+    if (!viewport) return providers;
+    return providers.filter(
+      (p) =>
+        p.latitude >= viewport.south &&
+        p.latitude <= viewport.north &&
+        p.longitude >= viewport.west &&
+        p.longitude <= viewport.east
+    );
+  }, [providers, viewport]);
+
   const hasFilters = Boolean(q || verified || categoryParam);
   const emptyRadio = !loading && !error && providers.length === 0 && hasPin;
   const summary = useMemo(() => {
     if (loading || error) return null;
     if (total === 0) return null;
-    const base = `${total} frutería${total !== 1 ? "s" : ""}`;
+    const shown = visibleProviders.length;
+    const base = `${shown} frutería${shown !== 1 ? "s" : ""}`;
     if (hasPin) return `${base} a ${radiusKm} km`;
     return `${base} en Monterrey`;
-  }, [loading, error, total, hasPin, radiusKm]);
+  }, [loading, error, total, hasPin, radiusKm, visibleProviders.length]);
 
-  const onGeocodeReady = useCallback(
-    (fn: (q: string) => Promise<{ lat: number; lng: number; formattedAddress: string }>) => {
-      setGeocodeFn(() => fn);
+  const mapProps = {
+    providers,
+    hoveredId,
+    setHoveredId,
+    loading,
+    pin,
+    radiusKm,
+    onPinChange: (lat: number, lng: number) => setPin({ lat, lng, formattedAddress: pinLabel }),
+    tilesDown,
+    onTilesError: setTilesDown,
+    onViewportChange,
+    onRadiusChange: (km: number) => {
+      if (hasPin) setPin({ lat: latParam!, lng: lngParam!, formattedAddress: pinLabel, radius: km });
+      else {
+        pushParams((params) => {
+          params.set("radiusKm", String(km));
+        });
+      }
     },
-    []
-  );
+  };
 
   return (
     <>
-      {getGoogleMapsApiKey() ? <GeocodeBridge onReady={onGeocodeReady} /> : null}
-
-      <FilterBar activeFilters={activeFilters} onToggle={toggleFilter} />
-      <LocationBar
-        radiusKm={radiusKm}
-        onRadiusChange={(km) => {
-          if (hasPin) setPin({ lat: latParam!, lng: lngParam!, formattedAddress: pinLabel, radius: km });
-          else {
-            pushParams((params) => {
-              params.set("radiusKm", String(km));
-            });
-          }
-        }}
-        hasPin={hasPin}
-        pinLabel={pinLabel}
+      <FilterBar
+        activeFilters={activeFilters}
+        onToggle={toggleFilter}
         onUseMyLocation={onUseMyLocation}
         locating={locating}
+      />
+      <CompactAddressBar
+        radiusKm={radiusKm}
+        hasPin={hasPin}
+        pinLabel={pinLabel}
         geoDenied={geoDenied && !hasPin}
         onSearchAddress={onSearchAddress}
         addresses={addresses}
@@ -443,7 +457,7 @@ function ExploreContent() {
               role="list"
               aria-label="Lista de fruterías"
             >
-              {providers.map((provider) => (
+              {visibleProviders.map((provider) => (
                 <ProviderCard
                   key={provider.id}
                   provider={provider}
@@ -479,31 +493,13 @@ function ExploreContent() {
           )}
         </div>
 
-        <div className="sticky top-[130px] hidden h-[calc(100vh-220px)] lg:block lg:w-[45%] xl:w-[42%]">
-          <ExploreMapSection
-            providers={providers}
-            hoveredId={hoveredId}
-            setHoveredId={setHoveredId}
-            loading={loading}
-            className="h-full"
-            pin={pin}
-            radiusKm={radiusKm}
-            onPinChange={(lat, lng) => setPin({ lat, lng, formattedAddress: pinLabel })}
-          />
+        <div className="sticky top-[130px] hidden h-[calc(100vh-240px)] lg:block lg:w-[45%] xl:w-[42%]">
+          <ExploreMapSection {...mapProps} className="h-full" />
         </div>
       </div>
 
       <div className="h-[300px] w-full px-6 pb-6 lg:hidden">
-        <ExploreMapSection
-          providers={providers}
-          hoveredId={hoveredId}
-          setHoveredId={setHoveredId}
-          loading={loading}
-          className="h-full overflow-hidden rounded-xl"
-          pin={pin}
-          radiusKm={radiusKm}
-          onPinChange={(lat, lng) => setPin({ lat, lng, formattedAddress: pinLabel })}
-        />
+        <ExploreMapSection {...mapProps} className="h-full overflow-hidden rounded-xl" />
       </div>
     </>
   );
@@ -511,18 +507,16 @@ function ExploreContent() {
 
 export function ExplorePageClient() {
   return (
-    <GoogleMapsProvider>
-      <Suspense
-        fallback={
-          <div className="grid grid-cols-1 gap-6 px-6 py-6 sm:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <SkeletonCard key={i} />
-            ))}
-          </div>
-        }
-      >
-        <ExploreContent />
-      </Suspense>
-    </GoogleMapsProvider>
+    <Suspense
+      fallback={
+        <div className="grid grid-cols-1 gap-6 px-6 py-6 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      }
+    >
+      <ExploreContent />
+    </Suspense>
   );
 }

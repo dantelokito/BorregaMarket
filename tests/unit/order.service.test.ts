@@ -137,6 +137,43 @@ describe("createMarketplaceOrder", () => {
       })
     ).rejects.toBeInstanceOf(ProductUnavailableError);
   });
+
+  it("rejects catalog products whose Product.isActive is false", async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.provider.findFirst.mockResolvedValue({
+      id: "prov1",
+      businessName: "Don Carlos",
+      offersDelivery: false,
+      preparationTimeMinutes: 20,
+      latitude: 25.6714,
+      longitude: -100.3089,
+      user: { email: "c@test.com" },
+    });
+    prismaMock.user.findUnique.mockResolvedValue({ name: "María", phone: "811" });
+    prismaMock.providerProduct.findMany.mockResolvedValue([
+      {
+        id: "pp1",
+        providerId: "prov1",
+        productId: "prod1",
+        isAvailable: true,
+        price: new Decimal("10.00"),
+        product: { name: "Mango", isActive: false },
+      },
+    ]);
+
+    await expect(
+      createMarketplaceOrder({
+        clientId: "client1",
+        clientName: "María",
+        input: {
+          providerId: "prov1",
+          fulfillmentType: "PICKUP",
+          items: [{ providerProductId: "pp1", quantity: "1", unitOfMeasure: "PZA" }],
+        },
+        idempotencyKey: "11111111-1111-4111-8111-111111111111",
+      })
+    ).rejects.toBeInstanceOf(ProductUnavailableError);
+  });
 });
 
 describe("createPosSale", () => {
@@ -215,6 +252,34 @@ describe("createPosSale", () => {
     expect(payload.items.create[0].providerProductId).toBeNull();
     expect(payload.items.create[0].itemName).toBe("Piña miel");
     expect(includeShape).toBeTruthy();
+  });
+
+  it("rejects unavailable catalog lines and does not create the sale", async () => {
+    prismaMock.provider.findUnique.mockResolvedValue({ id: "prov1", userId: "u2" });
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.providerProduct.findMany.mockResolvedValue([
+      {
+        id: "pp1",
+        providerId: "prov1",
+        productId: "prod1",
+        isAvailable: false,
+        price: new Decimal("10.00"),
+        product: { name: "Mango", isActive: true },
+      },
+    ]);
+
+    await expect(
+      createPosSale({
+        userId: "u2",
+        idempotencyKey: "11111111-1111-4111-8111-111111111111",
+        input: {
+          paymentMethod: PaymentMethod.CASH,
+          status: OrderStatus.DELIVERED,
+          items: [{ providerProductId: "pp1", quantity: "1", unitOfMeasure: "PZA" }],
+        },
+      })
+    ).rejects.toBeInstanceOf(ProductUnavailableError);
+    expect(prismaMock.order.create).not.toHaveBeenCalled();
   });
 });
 

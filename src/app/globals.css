@@ -4,6 +4,7 @@
   --brand: #e23744;
   --brand-dark: #c13515;
   --brand-light: #ff5a5f;
+  --brand-secondary: #c13515;
 }
 
 body {
@@ -17,6 +18,19 @@ body {
 .filter-scroll {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  font-family: inherit;
+}
+
+.lbm-price-icon,
+.lbm-user-pin,
+.lbm-mini-pin {
+  background: transparent;
+  border: none;
 }
 
 /* Price bubble on map */
