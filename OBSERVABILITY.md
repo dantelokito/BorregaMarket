@@ -10,10 +10,10 @@
 | Campo | Valor |
 |-------|-------|
 | **Producto** | LaBorregaMarket |
-| **Versión frontend** | 0.2.0 (Fase 2) |
-| **Fecha** | 10/08/2026 |
+| **Versión frontend** | 0.5.0 (Fase 5) |
+| **Fecha** | 16/08/2026 |
 | **Agente** | Frontend Developer |
-| **Estado fase** | ✅ Sprint 0 + F2-A/B/C (NOTIFY, MEDIA, EXPLORE) |
+| **Estado fase** | ✅ F1–F5 en código (Leaflet/OSM, CAT inhabilitado, marca PROVIDER) |
 | **Código base** | `./` (repo LaBorregaMarket) |
 
 ---
@@ -25,7 +25,7 @@
 | Next.js | 15 | App Router, Server Components, API routes |
 | React | 19 | UI components |
 | Tailwind CSS | 4 | Estilos utility-first |
-| Leaflet + react-leaflet | 1.9 / 5 | Mapas explorar, detalle, onboarding |
+| Leaflet + react-leaflet | 1.9 / 5 | `/explorar` y MiniMap (F5, ADR-020). Sin Maps JS SDK |
 | lucide-react | — | Iconografía |
 | Inter (next/font) | — | Tipografía principal |
 
@@ -37,11 +37,14 @@
 src/
 ├── lib/api/           # Capa API tipada (envelope { data, meta })
 ├── lib/auth/          # getServerSession, redirect, JWT
+├── lib/color/         # Contraste WCAG (F5 brand)
+├── lib/maps/          # Teselas OSM, Nominatim (F5)
 ├── components/ui/     # Design system: Button, Input, EmptyState, Skeleton, ErrorBanner, UserMenu, StepIndicator
 ├── components/layout/ # Header (client) + HeaderWrapper (server)
-├── components/explore/  # ProviderCard, FilterBar, ExploreMap
-├── components/fruteria/ # ProviderHero, ProductTable, MiniMap, CallCTA
-└── components/provider/ # OnboardingCTA, PriceInput
+├── components/explore/  # ProviderCard, FilterBar, ExploreMap, CompactAddressBar
+├── components/fruteria/ # ProviderHero, ProductTable, MiniMap, MiniMapInner, CallCTA
+├── components/provider/ # OnboardingCTA, PriceInput, BrandColorPicker
+└── components/providers/ # AppProviders, SessionThemeProvider
 ```
 
 ### Decisiones técnicas
@@ -53,7 +56,9 @@ src/
 | Filtros categoría client-side | API no expone filtro por categoría; keywords en `matchesCategoryFilter` |
 | `PriceInput` inline con blur/Enter | OBS-04: edición precio sin modal, guardado por fila |
 | Demo accounts gated por `NODE_ENV` | OBS-05: solo visible en desarrollo |
-| Mapa móvil debajo de lista (300px) | OBS-01: cumple WF-explorar responsive |
+| Mapa Leaflet/OSM sin key Google | F5 ADR-020; cierra fallback “Mapa no disponible” |
+| Tema PROVIDER vía sesión | `GET /api/auth/session` → CSS vars (`SessionThemeProvider`) |
+| Catálogo inhabilitado | Detalle/explorar/carrito/POS ocultan `isAvailable=false` |
 
 ---
 
@@ -62,7 +67,8 @@ src/
 | Variable | Requerida | Descripción | Ejemplo |
 |----------|-----------|-------------|---------|
 | `NEXT_PUBLIC_APP_NAME` | No | Nombre de la app en UI | `LaBorregaMarket` |
-| `NEXT_PUBLIC_APP_URL` | No | URL base para links absolutos | `http://localhost:3000` |
+| `NEXT_PUBLIC_APP_URL` | No | URL base para links absolutos | `http://localhost:8080` |
+| `NEXT_PUBLIC_OSM_TILE_URL` | No | Template `{z}/{x}/{y}` teselas OSM (F5) | vacío = OSM default |
 | `JWT_SECRET` | Sí (server) | Secreto JWT (min 32 chars) | `your-super-secret-key-min-32-chars` |
 | `JWT_EXPIRES_IN` | No | Expiración del token | `7d` |
 | `DATABASE_URL` | Sí (server) | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/laborregamarket` |
@@ -76,9 +82,9 @@ Referencia: [`.env.example`](./.env.example)
 ```bash
 cd ./LaBorregaMarket
 npm install
-npx prisma migrate dev
+npx prisma migrate deploy
 npx prisma db seed
-npm run dev    # http://localhost:3000
+npm run dev    # http://localhost:8080
 ```
 
 ---
@@ -88,14 +94,15 @@ npm run dev    # http://localhost:3000
 | Ruta | Perfil | Componente | API |
 |------|--------|------------|-----|
 | `/` | Público | `page.tsx` | — |
-| `/explorar` | Público | `ExplorePageClient` | `GET /api/providers` |
-| `/fruteria/[id]` | Público | `FruteriaDetailClient` | `GET /api/providers/[id]` |
+| `/explorar` | Público | `ExplorePageClient` | `GET /api/providers` (Leaflet, sin Maps JS key) |
+| `/fruteria/[id]` | Público | `FruteriaDetailClient` | `GET /api/providers/[id]` (omite inactivos) |
 | `/login` | Público | `LoginPageClient` | `POST /api/auth/login` |
 | `/registro` | Público | `RegisterPageClient` | `POST /api/auth/register` |
 | `/registro/negocio` | PROVIDER | `BusinessOnboardingClient` | `POST /api/providers` |
 | `/cuenta` | CLIENT | `CuentaPageClient` | `GET/PATCH /api/users/me` |
-| `/proveedor` | PROVIDER | `ProveedorPageClient` | `GET /api/provider/me`, products |
+| `/proveedor` | PROVIDER | `ProveedorPageClient` | `GET/PATCH /api/provider/me` (colores F5), products |
 | `/admin` | ADMIN | `AdminPageClient` | catalogs, providers, audit |
+| — | Público | `SessionThemeProvider` | `GET /api/auth/session` (200 invitado; `brand` solo PROVIDER) |
 
 ---
 
@@ -115,6 +122,8 @@ npm run dev    # http://localhost:3000
 | OBS-10 | P2 | `EmptyState` + CTA Llamar en productos vacíos |
 | OBS-11 | P2 | Link "Ver mi negocio →" en panel proveedor |
 | OBS-12 | P2 | `StepIndicator` paso 1/2 en registro PROVIDER |
+
+Historial F2 (OBS-01…12) se conserva. Superficie F5: Leaflet/OSM, `CompactAddressBar`, `BrandColorPicker`, `SessionThemeProvider`.
 
 ---
 
@@ -138,9 +147,9 @@ npm run dev    # http://localhost:3000
 | Perfil | Rol | Pantallas principales |
 |--------|-----|----------------------|
 | Clientes finales | `CLIENT` | Explorar, detalle frutería, cuenta |
-| Fruterías / Negocios | `PROVIDER` | Onboarding, panel catálogo, ver negocio |
+| Fruterías / Negocios | `PROVIDER` | Onboarding, panel catálogo, POS, colores de marca, ver negocio |
 | Proveedores PyME | `PROVIDER` | Mismo flujo que fruterías |
-| Operador plataforma | `ADMIN` | Panel admin (catálogos, proveedores, bitácora) |
+| Operador plataforma | `ADMIN` | Panel admin (catálogos, proveedores, bitácora, analytics) |
 
 ---
 
@@ -148,8 +157,8 @@ npm run dev    # http://localhost:3000
 
 **Estado: ENTERADO ✅**
 
-Frontend v0.1.1 alineado con wireframes UX/UI y correcciones de auditoría. Listo para re-auditoría UX y pruebas integrales por @QA / Tester Senior.
+Frontend v0.5.0: Leaflet/OSM en Explorar, catálogo inhabilitado en canales de venta, tema de sesión PROVIDER. Historial OBS-01…12 F2 intacto.
 
 ---
 
-*Actualizado por Frontend Developer — LaBorregaMarket v0.1.1.*
+*Actualizado — LaBorregaMarket v0.5.0.*

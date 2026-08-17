@@ -2,7 +2,7 @@
 
 Marketplace de fruterías, verdulerías y productos agrícolas — inspirado en la UX de Airbnb.
 
-**Versión:** 0.4.0 (Fase 4 — reviews, geo, notify async, analytics)
+**Versión:** 0.5.0 (Fase 5 — Leaflet/OSM, catálogo inhabilitado, marca PROVIDER)
 
 ## Stack
 
@@ -13,7 +13,7 @@ Marketplace de fruterías, verdulerías y productos agrícolas — inspirado en 
 | ORM | Prisma 6 |
 | Base de datos | PostgreSQL 15+ |
 | Auth | JWT (httpOnly cookie) + bcrypt |
-| Mapas | Google Maps JS (F4) + Leaflet fallback |
+| Mapas | Leaflet + teselas OSM (F5). Sin Google Maps JS en `/explorar` |
 | Email | Resend (F2) |
 | Media | Cloudinary (F2) |
 | Rate limit | Upstash Redis (F4 prod) / in-memory (local) |
@@ -26,6 +26,7 @@ Marketplace de fruterías, verdulerías y productos agrícolas — inspirado en 
 | F1–F2 | Auth, explorar, contacto, media, catálogo |
 | F3 | Checkout pickup, carrito, POS proveedor, dashboard, órdenes activas |
 | F4 | Reseñas, geo/radio/ETA, direcciones favoritas, analytics admin, notify async, báscula POS |
+| F5 | Mapa Leaflet/OSM, productos inhabilitados fuera de canales de venta, colores de marca en sesión PROVIDER |
 
 ## Inicio rápido
 
@@ -40,10 +41,12 @@ Marketplace de fruterías, verdulerías y productos agrícolas — inspirado en 
 cd LaBorregaMarket
 npm install                  # postinstall ejecuta prisma generate
 cp .env.example .env         # editar DATABASE_URL y JWT_SECRET
-npx prisma migrate deploy
+npx prisma migrate deploy    # incluye F5 add_provider_brand_colors
 npm run db:seed
 npm run dev                  # http://localhost:8080
 ```
+
+En Windows: para `prisma generate` / `migrate`, detén `next dev` si el DLL del query engine está bloqueado.
 
 ### Cuentas demo (solo desarrollo)
 
@@ -66,17 +69,17 @@ Referencia completa en [`.env.example`](./.env.example). Nunca commitees `.env` 
 | `NEXT_PUBLIC_APP_URL` | F2 | URL canónica (links email) |
 | `RESEND_API_KEY`, `EMAIL_FROM` | F2 | Email contacto |
 | `CLOUDINARY_*` | F2 | Upload imágenes |
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | F4 | Mapas (restringir por HTTP referrer en Google Cloud) |
+| `NEXT_PUBLIC_OSM_TILE_URL` | F5 | Teselas OSM (opcional). Default: `tile.openstreetmap.org`. **No** se exige Maps JS key |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | F4 | Rate limit contacto (obligatorio en prod) |
 | `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` | F4 | Jobs async (`/api/inngest`) |
 | `WHATSAPP_*` | F4 | Notificaciones WA (opcional) |
 
-Sin keys opcionales en local: degradación controlada (email no-op, maps deshabilitado, Redis in-memory).
+Sin keys opcionales en local: degradación controlada (email no-op, Redis in-memory). `/explorar` renderiza Leaflet **sin** `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`. URL/Place ID de reseñas Google (F4) no usa el SDK JS.
 
 ## Seguridad en producción
 
 - Rotar `JWT_SECRET`, `UPSTASH_*`, `INNGEST_*`, `WHATSAPP_*` por entorno.
-- Restringir `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` por referrer (dominio + localhost).
+- Teselas OSM: política OSMF o CDN en `NEXT_PUBLIC_OSM_TILE_URL`. Attribution en UI.
 - Cookie JWT: `secure: true` cuando `NODE_ENV=production`.
 - No subir `.env` al repositorio; usar secret manager del hosting.
 - Cuentas demo (`Demo1234!`) solo para dev/staging.
@@ -85,12 +88,13 @@ Sin keys opcionales en local: degradación controlada (email no-op, maps deshabi
 
 | Ruta | Descripción | Acceso |
 |------|-------------|--------|
-| `/explorar` | Mapa + tarjetas (geo F4) | Público |
-| `/fruteria/[id]` | Detalle + contacto | Público |
+| `/explorar` | Mapa Leaflet/OSM + tarjetas (radio F4) | Público |
+| `/fruteria/[id]` | Detalle + contacto (omite inactivos) | Público |
 | `/carrito` | Checkout pickup | CLIENT |
 | `/cuenta` | Perfil + direcciones | CLIENT |
-| `/proveedor/*` | Catálogo, POS, órdenes, dashboard | PROVIDER |
+| `/proveedor/*` | Catálogo, POS, órdenes, dashboard, colores | PROVIDER |
 | `/admin` | Catálogos, analytics, moderación reseñas | ADMIN |
+| `GET /api/auth/session` | Sesión + `brand` PROVIDER (tema CSS) | Público (200 invitado) |
 
 ## Scripts útiles
 

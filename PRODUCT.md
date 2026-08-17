@@ -1,8 +1,8 @@
 # LaBorregaMarket — Product Overview
 
-> **Versión del producto:** 0.4.0 (Fase 4 — reviews, geo, notify, analytics)  
-> **Última actualización:** 14/08/2026  
-> **Estado:** Pre-lanzamiento — F3+F4 implementadas en código; staging pendiente  
+> **Versión del producto:** 0.5.0 (Fase 5 — Leaflet/OSM, catálogo inhabilitado, marca PROVIDER)  
+> **Última actualización:** 16/08/2026  
+> **Estado:** Pre-lanzamiento — F1–F5 implementadas en código; staging/CI pendiente  
 > **Licencia:** Privado — LaBorregaMarket © 2026
 
 ---
@@ -47,8 +47,8 @@ El mercado de productos frescos en México es masivo y fragmentado. Las fruterí
 ├─────────────────┼─────────────────┼─────────────────────────────┤
 │ Explorar en mapa│ Catálogo global │ Curar productos del sistema │
 │ Comparar precios│ Activar/desactivar│ Verificar negocios         │
-│ Contactar directo│ Precios propios │ Bitácora y permisos        │
-│ (próximo: pedidos)│ (próximo: pedidos)│ Analytics (roadmap)      │
+│ Contactar / pedir│ Precios y marca │ Bitácora y permisos        │
+│ Radio + reseñas │ POS y dashboard │ Analytics de plataforma    │
 └─────────────────┴─────────────────┴─────────────────────────────┘
 ```
 
@@ -189,7 +189,11 @@ Modelo central del producto: **un catálogo global administrado por la plataform
 | ORM | Prisma 6 |
 | Base de datos | PostgreSQL 15+ |
 | Autenticación | JWT (jsonwebtoken) + bcrypt |
-| Mapas | Leaflet + OpenStreetMap |
+| Mapas | Leaflet + teselas OSM (F5). Sin Google Maps JS en `/explorar` |
+| Email | Resend |
+| Media | Cloudinary |
+| Rate limit | Upstash Redis (prod) / in-memory (local) |
+| Jobs async | Inngest (+ WhatsApp Cloud API opcional) |
 | Validación | Zod |
 | Iconos | lucide-react |
 
@@ -232,28 +236,36 @@ Cada proveedor tiene entradas `ProviderProduct` con variación de precio (~±10%
 - [x] Notificaciones email al proveedor (contacto)
 - [x] Upload de imágenes (Cloudinary)
 - [x] Filtros avanzados conectados al backend
-- [ ] Cierre operativo: staging/CI, OBS-F2-003, OBS-F2-01, sign-off QA
+- [ ] Cierre operativo: staging/CI (diferido)
 
 ### Fase 3 — Pedidos y operación del proveedor (v0.3.0)
 
-- [ ] Checkout pickup in-app (`POST /api/orders`)
-- [ ] POS software (venta de mostrador)
-- [ ] Órdenes activas y transiciones de estado
-- [ ] Dashboard de ventas ilustrativo
-- [ ] Historial de pedidos en `/cuenta`
-- [ ] Pago al recoger / efectivo POS (sin pasarela)
+- [x] Checkout pickup in-app (`POST /api/orders`)
+- [x] POS software (venta de mostrador)
+- [x] Órdenes activas y transiciones de estado
+- [x] Dashboard de ventas
+- [x] Historial de pedidos en `/cuenta`
+- [x] Pago al recoger / efectivo POS (sin pasarela)
 
 ### Fase 4 — Confianza y escala (v0.4.0)
 
-- [ ] Reseñas y ratings reales
-- [ ] Filtro geográfico por radio
-- [ ] Cola email Redis/worker + WhatsApp Business API
-- [ ] Analytics admin de plataforma
+- [x] Reseñas y ratings reales
+- [x] Filtro geográfico por radio (Haversine)
+- [x] Cola email Inngest + Upstash Redis; WhatsApp Cloud API (Should)
+- [x] Analytics admin de plataforma
+- [x] Báscula POS (WebSerial, cliente)
 
-### Fase 5 — Canales y monetización (v0.5.0)
+### Fase 5 — Mapa OSM, catálogo y marca (v0.5.0)
+
+- [x] Leaflet + teselas OSM en `/explorar` (sin Google Maps JS)
+- [x] Producto inhabilitado omitido en canales de venta (409 al confirmar)
+- [x] Colores de marca PROVIDER + tema en `GET /api/auth/session`
+
+### Fase 6+ — Canales y monetización
 
 - [ ] PWA / app móvil
 - [ ] Pagos en línea (pasarela)
+- [ ] CFDI
 - [ ] Comisión o suscripción (Decisión #1 abierta)
 - [ ] Expansión a otras ciudades
 
@@ -275,10 +287,10 @@ Cada proveedor tiene entradas `ProviderProduct` con variación de precio (~±10%
 
 | # | Decisión | Opciones | Impacto |
 |---|----------|----------|---------|
-| 1 | Modelo de monetización | Comisión / suscripción / freemium | Pagos Fase 5 |
-| 2 | Flujo de pedido | Contacto vs checkout | **F2 contacto; F3 Opción A: checkout pickup** |
-| 3 | Verificación de proveedores | Manual vs documentos | Fase 4 si documentos |
-| 4 | Alcance geográfico inicial | Monterrey vs NL | Radio F4; ciudades F5 |
+| 1 | Modelo de monetización | Comisión / suscripción / freemium | Pagos F6+ |
+| 2 | Flujo de pedido | Contacto vs checkout | **Cerrada: F2 contacto; F3 checkout pickup** |
+| 3 | Verificación de proveedores | Manual vs documentos | Manual F4 (gate Google reseñas) |
+| 4 | Alcance geográfico inicial | Monterrey vs NL | Radio F4; ciudades F6+ |
 | 5 | Catálogo global | Solo admin vs proveedor propone | Independiente de F3 |
 | 6 | POS proveedor | Software en panel | **Cerrada: sí en F3** |
 
@@ -295,7 +307,7 @@ LaBorregaMarket adopta prácticas de documentación y transparencia del ecosiste
 | Esquema como contrato | `prisma/schema.prisma` — fuente de verdad del dominio |
 | Seed reproducible | `prisma/seed.ts` — demo consistente para QA y demos |
 | Convenciones de contribución | Roadmap explícito, gaps documentados |
-| Versionado semántico | `0.2.0` implementado; `0.3.0` en discovery PM |
+| Versionado semántico | `0.5.0` implementado; pagos/PWA en F6+ |
 
 **Nota:** El código es privado, pero la documentación de producto sigue el modelo de claridad, trazabilidad y reproducibilidad típico de proyectos OSS (CNCF, Mozilla, GitLab product handbook).
 
@@ -312,7 +324,7 @@ LaBorregaMarket adopta prácticas de documentación y transparencia del ecosiste
 | Protección de rutas | `src/middleware.ts` |
 | Permisos por módulo | `src/lib/auth/permissions.ts` |
 | Índice PM (lectura mínima) | `Administrador de producto/Product Manager/outputs/laborregamarket/README.md` |
-| Roadmap y fase activa | `.../laborregamarket/roadmap.md` y `.../laborregamarket/fase-3/` |
+| Roadmap y fase activa | `.../laborregamarket/STATUS.md` y `.../laborregamarket/fase-5/` |
 
 ---
 
