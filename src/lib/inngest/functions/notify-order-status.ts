@@ -8,6 +8,7 @@ export const notifyOrderStatus = inngest.createFunction(
   {
     id: "notify-order-status",
     retries: 2,
+    triggers: [{ event: "notify/order.status" }],
     onFailure: async ({ event }) => {
       const data = event.data.event.data as { orderId?: string };
       if (data?.orderId) {
@@ -24,7 +25,6 @@ export const notifyOrderStatus = inngest.createFunction(
       }
     },
   },
-  { event: "notify/order.status" },
   async ({ event }) => {
     const { orderId, status } = event.data as {
       orderId: string;

@@ -9,6 +9,7 @@ export const notifyContactRequested = inngest.createFunction(
   {
     id: "notify-contact-requested",
     retries: 2,
+    triggers: [{ event: "notify/contact.requested" }],
     onFailure: async ({ event }) => {
       const data = event.data.event.data as {
         providerId: string;
@@ -29,7 +30,6 @@ export const notifyContactRequested = inngest.createFunction(
       });
     },
   },
-  { event: "notify/contact.requested" },
   async ({ event }) => {
     const {
       providerId,
