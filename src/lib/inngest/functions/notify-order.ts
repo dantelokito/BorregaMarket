@@ -25,6 +25,7 @@ export const notifyOrderCreated = inngest.createFunction(
   {
     id: "notify-order-created",
     retries: 2,
+    triggers: [{ event: "notify/order.created" }],
     onFailure: async ({ event }) => {
       const data = event.data.event.data as { orderId: string };
       if (data?.orderId) {
@@ -35,7 +36,6 @@ export const notifyOrderCreated = inngest.createFunction(
       }
     },
   },
-  { event: "notify/order.created" },
   async ({ event }) => {
     const { orderId } = event.data as { orderId: string };
     const order = await prisma.order.findUnique({

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { SystemModule, AuditAction } from "@prisma/client";
 import { getSession } from "@/lib/auth/session";
-import { TOKEN_COOKIE } from "@/lib/auth/token";
+import { clearSessionCookie } from "@/lib/auth/cookie";
 import { writeAuditLog } from "@/lib/audit";
 import { ok } from "@/lib/api/response";
 
@@ -18,6 +18,6 @@ export async function POST(request: NextRequest) {
   }
 
   const response = ok({ message: "Sesión cerrada" });
-  response.cookies.delete(TOKEN_COOKIE);
+  clearSessionCookie(response);
   return response;
 }

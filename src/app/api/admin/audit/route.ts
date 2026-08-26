@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const actionParam = searchParams.get("action");
     const userId = searchParams.get("userId");
 
-    const module =
+    const systemModule =
       moduleParam && VALID_MODULES.includes(moduleParam as SystemModule)
         ? (moduleParam as SystemModule)
         : undefined;
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         : undefined;
 
     const result = await listAuditLogs(
-      { module, action, userId: userId ?? undefined },
+      { module: systemModule, action, userId: userId ?? undefined },
       { page, limit, skip }
     );
 

@@ -1,33 +1,24 @@
-import type { JwtPayload } from "./token";
+import { jwtVerify } from "jose";
+import { resolveJwtSecret } from "./jwt-secret";
+import { TOKEN_COOKIE, USER_ROLES, UserRole, type JwtPayload } from "./types";
 
-export const TOKEN_COOKIE = "lbm_token";
+export { TOKEN_COOKIE };
 
-export function verifyToken(token: string): JwtPayload | null {
+/** Edge-safe JWT verify (firma HS256). Nunca decodificar el payload sin verificar. */
+export async function verifyToken(token: string): Promise<JwtPayload | null> {
   if (!token) return null;
 
-  const segments = token.split(".");
-  if (segments.length !== 3) return null;
-
   try {
-    const base64Payload = segments[1]
-      .replace(/-/g, "+")
-      .replace(/_/g, "/")
-      .padEnd(Math.ceil(segments[1].length / 4) * 4, "=");
+    const secret = new TextEncoder().encode(resolveJwtSecret());
+    const { payload } = await jwtVerify(token, secret);
+    const sub = typeof payload.sub === "string" ? payload.sub : "";
+    const email = typeof payload.email === "string" ? payload.email : "";
+    const role = typeof payload.role === "string" ? payload.role : "";
+    const name = typeof payload.name === "string" ? payload.name : "";
 
-    const binary = globalThis.atob(base64Payload);
-    const json = decodeURIComponent(
-      binary
-        .split("")
-        .map((char) => "%" + char.charCodeAt(0).toString(16).padStart(2, "0"))
-        .join("")
-    );
+    if (!sub || !email || !name || !USER_ROLES.has(role)) return null;
 
-    const payload = JSON.parse(json) as JwtPayload & { exp?: number };
-    if (typeof payload.exp === "number" && payload.exp * 1000 < Date.now()) {
-      return null;
-    }
-
-    return payload as JwtPayload;
+    return { sub, email, role: role as UserRole, name };
   } catch {
     return null;
   }

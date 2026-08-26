@@ -1,7 +1,5 @@
 import { NextRequest } from "next/server";
-import { UserRole } from "@/lib/auth/token";
-import { JwtPayload } from "./token";
-import { verifyToken, TOKEN_COOKIE } from "./edge-token";
+import { UserRole, verifyToken, TOKEN_COOKIE, type JwtPayload } from "./token";
 
 export function extractToken(request: NextRequest): string | null {
   const authHeader = request.headers.get("authorization");

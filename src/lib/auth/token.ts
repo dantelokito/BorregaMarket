@@ -1,29 +1,43 @@
 import jwt from "jsonwebtoken";
+import { resolveJwtSecret } from "./jwt-secret";
+import { USER_ROLES, type JwtPayload, type UserRole } from "./types";
 
-export const UserRole = {
-  CLIENT: "CLIENT",
-  PROVIDER: "PROVIDER",
-  ADMIN: "ADMIN",
-} as const;
+export {
+  TOKEN_COOKIE,
+  UserRole,
+  type JwtPayload,
+} from "./types";
+export {
+  DEV_JWT_FALLBACK,
+  MIN_JWT_SECRET_LENGTH,
+  JwtSecretError,
+  resolveJwtSecret,
+} from "./jwt-secret";
 
-export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+function toJwtPayload(decoded: string | jwt.JwtPayload): JwtPayload {
+  if (typeof decoded !== "object" || decoded === null) {
+    throw new Error("Invalid token payload");
+  }
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-in-production";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? "7d";
+  const sub = typeof decoded.sub === "string" ? decoded.sub : "";
+  const email = typeof decoded.email === "string" ? decoded.email : "";
+  const role = typeof decoded.role === "string" ? decoded.role : "";
+  const name = typeof decoded.name === "string" ? decoded.name : "";
 
-export interface JwtPayload {
-  sub: string;
-  email: string;
-  role: UserRole;
-  name: string;
+  if (!sub || !email || !name || !USER_ROLES.has(role)) {
+    throw new Error("Invalid token payload");
+  }
+
+  return { sub, email, role: role as UserRole, name };
 }
 
 export function signToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"] });
+  const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? "7d";
+  return jwt.sign(payload, resolveJwtSecret(), {
+    expiresIn: JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"],
+  });
 }
 
 export function verifyToken(token: string): JwtPayload {
-  return jwt.verify(token, JWT_SECRET) as JwtPayload;
+  return toJwtPayload(jwt.verify(token, resolveJwtSecret()));
 }
-
-export const TOKEN_COOKIE = "lbm_token";

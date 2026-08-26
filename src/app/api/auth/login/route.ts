@@ -3,9 +3,16 @@ import { z } from "zod";
 import { SystemModule, AuditAction } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
-import { signToken, TOKEN_COOKIE } from "@/lib/auth/token";
+import { signToken } from "@/lib/auth/token";
+import { setSessionCookie } from "@/lib/auth/cookie";
 import { writeAuditLog } from "@/lib/audit";
 import { ok, apiError, fromZodError } from "@/lib/api/response";
+import {
+  AuthRateLimitError,
+  AuthRedisUnavailableError,
+  checkAuthRateLimit,
+  clientIp,
+} from "@/lib/rate-limit/auth";
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -14,6 +21,11 @@ const loginSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const allowed = await checkAuthRateLimit({ action: "login", ip: clientIp(request) });
+    if (!allowed) {
+      throw new AuthRateLimitError();
+    }
+
     const body = await request.json();
     const { email, password } = loginSchema.parse(body);
 
@@ -52,16 +64,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    response.cookies.set(TOKEN_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
-      path: "/",
-    });
+    setSessionCookie(response, token);
 
     return response;
   } catch (err) {
+    if (err instanceof AuthRateLimitError) {
+      return apiError(err.message, 429);
+    }
+    if (err instanceof AuthRedisUnavailableError) {
+      return apiError(err.message, 503);
+    }
     if (err instanceof z.ZodError) {
       const details = fromZodError(err);
       return apiError(details[0]?.message ?? "Validation failed", 400, details);

@@ -1,54 +1,43 @@
 # LaBorregaMarket
 
-Marketplace de fruterías, verdulerías y productos agrícolas — inspirado en la UX de Airbnb.
+Marketplace open source para **fruterías, verdulerías y productores agrícolas** en México. El objetivo es que un cliente encuentre negocio fresco cerca, compare y contacte o pida directo al proveedor — sin intermediarios.
 
-**Versión:** 0.5.0 (Fase 5 — Leaflet/OSM, catálogo inhabilitado, marca PROVIDER)
+**Versión:** 0.5.0 · Licencia [MIT](./LICENSE)
 
-## Stack
+## Qué puedes hacer
 
-| Capa | Tecnología |
-|------|-----------|
-| Frontend | Next.js 15, React 19, Tailwind CSS 4 |
-| Backend | Next.js API Routes |
-| ORM | Prisma 6 |
-| Base de datos | PostgreSQL 15+ |
-| Auth | JWT (httpOnly cookie) + bcrypt |
-| Mapas | Leaflet + teselas OSM (F5). Sin Google Maps JS en `/explorar` |
-| Email | Resend (F2) |
-| Media | Cloudinary (F2) |
-| Rate limit | Upstash Redis (F4 prod) / in-memory (local) |
-| Jobs async | Inngest + WhatsApp Cloud API (F4, opcional) |
+| Quién | Qué ofrece la app |
+|-------|-------------------|
+| **Cliente** | Explorar en mapa (OpenStreetMap), filtrar por radio, ver horarios y reseñas, contactar o hacer pedido para recoger |
+| **Proveedor** | Catálogo sobre productos de la plataforma, precios, colores de marca, POS de mostrador, órdenes y reportes |
+| **Admin** | Curar el catálogo global, verificar negocios, moderar reseñas y ver analítica |
 
-## Funcionalidades por fase
-
-| Fase | Entregables |
-|------|-------------|
-| F1–F2 | Auth, explorar, contacto, media, catálogo |
-| F3 | Checkout pickup, carrito, POS proveedor, dashboard, órdenes activas |
-| F4 | Reseñas, geo/radio/ETA, direcciones favoritas, analytics admin, notify async, báscula POS |
-| F5 | Mapa Leaflet/OSM, productos inhabilitados fuera de canales de venta, colores de marca en sesión PROVIDER |
+La sesión usa JWT en cookie **httpOnly**. Las cuentas demo del seed **solo existen en desarrollo** y no se muestran en producción.
 
 ## Inicio rápido
 
-### Prerrequisitos
-
-- Node.js 20+
-- PostgreSQL 15+
-
-### Instalación
+**Requisitos:** Node.js 20+ y PostgreSQL 15+.
 
 ```bash
-cd LaBorregaMarket
-npm install                  # postinstall ejecuta prisma generate
-cp .env.example .env         # editar DATABASE_URL y JWT_SECRET
-npx prisma migrate deploy    # incluye F5 add_provider_brand_colors
-npm run db:seed
-npm run dev                  # http://localhost:8080
+git clone https://github.com/dantelokito/BorregaMarket.git
+cd BorregaMarket
+npm install
+cp .env.example .env
 ```
 
-En Windows: para `prisma generate` / `migrate`, detén `next dev` si el DLL del query engine está bloqueado.
+En `.env` cambia `DATABASE_URL` y pon un `JWT_SECRET` de **al menos 32 caracteres**.
 
-### Cuentas demo (solo desarrollo)
+```bash
+npx prisma migrate deploy
+npm run db:seed
+npm run dev
+```
+
+Abre [http://localhost:8080](http://localhost:8080).
+
+En Windows, detén `next dev` si `prisma generate` o `migrate` fallan porque el query engine está bloqueado.
+
+### Cuentas demo (solo local)
 
 | Email | Rol | Password |
 |-------|-----|----------|
@@ -56,55 +45,62 @@ En Windows: para `prisma generate` / `migrate`, detén `next dev` si el DLL del 
 | frutas@elparaiso.mx | PROVIDER | Demo1234! |
 | cliente@demo.mx | CLIENT | Demo1234! |
 
-**No uses estas credenciales en producción.** Rota `JWT_SECRET` y desactiva o cambia el seed en staging/prod.
+No uses estas credenciales en producción. El seed se niega a crearlas si `NODE_ENV=production` (salvo `ALLOW_DEMO_SEED=true`). Rota `JWT_SECRET` en cada entorno.
 
 ## Variables de entorno
 
-Referencia completa en [`.env.example`](./.env.example). Nunca commitees `.env` con valores reales.
+Lista completa en [`.env.example`](./.env.example). **Nunca** subas un `.env` real al repositorio.
 
-| Variable | Fase | Uso |
-|----------|------|-----|
-| `DATABASE_URL` | F1 | PostgreSQL |
-| `JWT_SECRET` | F1 | Firma JWT (min 32 chars, único por entorno) |
-| `NEXT_PUBLIC_APP_URL` | F2 | URL canónica (links email) |
-| `RESEND_API_KEY`, `EMAIL_FROM` | F2 | Email contacto |
-| `CLOUDINARY_*` | F2 | Upload imágenes |
-| `NEXT_PUBLIC_OSM_TILE_URL` | F5 | Teselas OSM (opcional). Default: `tile.openstreetmap.org`. **No** se exige Maps JS key |
-| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | F4 | Rate limit contacto (obligatorio en prod) |
-| `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` | F4 | Jobs async (`/api/inngest`) |
-| `WHATSAPP_*` | F4 | Notificaciones WA (opcional) |
+**Obligatorias para arrancar**
 
-Sin keys opcionales en local: degradación controlada (email no-op, Redis in-memory). `/explorar` renderiza Leaflet **sin** `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`. URL/Place ID de reseñas Google (F4) no usa el SDK JS.
+| Variable | Uso |
+|----------|-----|
+| `DATABASE_URL` | PostgreSQL |
+| `JWT_SECRET` | Firma de sesión (mínimo 32 caracteres, único por entorno) |
 
-## Seguridad en producción
+**Recomendadas en producción**
 
-- Rotar `JWT_SECRET`, `UPSTASH_*`, `INNGEST_*`, `WHATSAPP_*` por entorno.
-- Teselas OSM: política OSMF o CDN en `NEXT_PUBLIC_OSM_TILE_URL`. Attribution en UI.
-- Cookie JWT: `secure: true` cuando `NODE_ENV=production`.
-- No subir `.env` al repositorio; usar secret manager del hosting.
-- Cuentas demo (`Demo1234!`) solo para dev/staging.
+| Variable | Uso |
+|----------|-----|
+| `NEXT_PUBLIC_APP_URL` | URL canónica (enlaces de email) |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Rate limit de contacto, login y registro (obligatorio en prod) |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Email de contacto |
+| `CLOUDINARY_*` | Subida de imágenes |
+| `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY` | Jobs async (`/api/inngest`) |
+| `WHATSAPP_*` | Notificaciones WhatsApp (opcional) |
+| `NEXT_PUBLIC_OSM_TILE_URL` | Teselas del mapa. Vacío = OSM por defecto |
+
+Sin las keys opcionales en local: email no-op, Redis en memoria. El mapa de `/explorar` no requiere API key de Google.
+
+## Stack
+
+Next.js 15, React 19, Tailwind CSS 4, Prisma 6, PostgreSQL 15+, JWT + bcrypt, Leaflet + OpenStreetMap.
 
 ## Rutas principales
 
 | Ruta | Descripción | Acceso |
 |------|-------------|--------|
-| `/explorar` | Mapa Leaflet/OSM + tarjetas (radio F4) | Público |
-| `/fruteria/[id]` | Detalle + contacto (omite inactivos) | Público |
-| `/carrito` | Checkout pickup | CLIENT |
-| `/cuenta` | Perfil + direcciones | CLIENT |
-| `/proveedor/*` | Catálogo, POS, órdenes, dashboard, colores | PROVIDER |
-| `/admin` | Catálogos, analytics, moderación reseñas | ADMIN |
-| `GET /api/auth/session` | Sesión + `brand` PROVIDER (tema CSS) | Público (200 invitado) |
+| `/explorar` | Mapa + tarjetas de negocios | Público |
+| `/fruteria/[id]` | Detalle y contacto | Público |
+| `/carrito` | Pedido para recoger | CLIENT |
+| `/cuenta` | Perfil y direcciones | CLIENT |
+| `/proveedor/*` | Catálogo, POS, órdenes, dashboard | PROVIDER |
+| `/admin` | Catálogos, analítica, reseñas | ADMIN |
 
-## Scripts útiles
+Visión de producto: [PRODUCT.md](./PRODUCT.md). Cómo contribuir: [CONTRIBUTING.md](./CONTRIBUTING.md). Vulnerabilidades: [SECURITY.md](./SECURITY.md).
+
+## Scripts
 
 ```bash
-npm run build          # producción
+npm run dev            # desarrollo, puerto 8080
+npm run build          # build de producción
+npm run start          # servir el build (puerto 8080)
 npm run test           # Vitest
-npm run db:migrate     # migraciones dev
-npm run db:seed        # datos demo
+npm run lint           # ESLint
+npm run db:migrate     # migraciones en desarrollo
+npm run db:seed        # datos demo (bloqueado en producción)
 ```
 
 ## Licencia
 
-Privado — LaBorregaMarket © 2026
+[MIT](./LICENSE) © 2026 LaBorregaMarket contributors
