@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { UserRole } from "@/lib/auth/token";
+import { UserRole } from "@/lib/auth/types";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth/edge-token";
 import {
   isAdminRoute,
@@ -10,7 +10,7 @@ import {
 
 const PUBLIC_PATHS = ["/", "/login", "/registro", "/explorar", "/fruteria", "/carrito"];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (
@@ -22,14 +22,7 @@ export function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get(TOKEN_COOKIE)?.value;
-  let session = null;
-  if (token) {
-    try {
-      session = verifyToken(token);
-    } catch {
-      // token inválido
-    }
-  }
+  const session = token ? await verifyToken(token) : null;
 
   const isPublic =
     PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/")) ||

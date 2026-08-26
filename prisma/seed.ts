@@ -1,9 +1,17 @@
 import { PrismaClient, UserRole, ProductCategory, ProductUnit, SystemModule, AuditAction } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { isDemoSeedAllowed } from "../src/lib/seed/demo-guard";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  if (!isDemoSeedAllowed()) {
+    console.error(
+      "Refusing to seed demo accounts in production. Set ALLOW_DEMO_SEED=true to override."
+    );
+    process.exit(1);
+  }
+
   console.log("🌱 Sembrando LaBorregaMarket...\n");
 
   // ─── Módulos del sistema ───────────────────────────────────────────────────

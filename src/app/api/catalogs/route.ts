@@ -21,12 +21,12 @@ export async function GET(request: NextRequest) {
       return ok({ catalogs: [...AVAILABLE_CATALOGS] });
     }
 
-    const module = getCatalogModule(catalog);
-    if (!module) {
+    const catalogModule = getCatalogModule(catalog);
+    if (!catalogModule) {
       return apiError("Catálogo inválido", 400);
     }
 
-    const canView = await hasModulePermission(session.role, module, "view");
+    const canView = await hasModulePermission(session.role, catalogModule, "view");
     if (!canView) {
       return apiError("Sin permiso para ver este catálogo", 403);
     }

@@ -1,9 +1,9 @@
 # LaBorregaMarket — Product Overview
 
-> **Versión del producto:** 0.5.0 (Fase 5 — Leaflet/OSM, catálogo inhabilitado, marca PROVIDER)  
-> **Última actualización:** 16/08/2026  
-> **Estado:** Pre-lanzamiento — F1–F5 implementadas en código; staging/CI pendiente  
-> **Licencia:** Privado — LaBorregaMarket © 2026
+> **Versión del producto:** 0.5.0  
+> **Última actualización:** 26/08/2026  
+> **Estado:** Pre-lanzamiento — mapa OSM, catálogo, pedidos pickup y marca de proveedor en código  
+> **Licencia:** [MIT](./LICENSE)
 
 ---
 
@@ -61,23 +61,21 @@ El mercado de productos frescos en México es masivo y fragmentado. Las fruterí
 - **Perfil:** 32 años, Monterrey. Compra frutas y verduras semanalmente.
 - **Necesidad:** Encontrar fruterías cercanas con buen precio y productos frescos.
 - **Journey objetivo:** Abrir app → explorar mapa → ver detalle de frutería → contactar o pedir.
-- **Cuenta demo:** `cliente@demo.mx`
+- **Cuenta demo:** ver [README.md](./README.md) (solo entorno local)
 
 ### 2. Carlos — Proveedor (`PROVIDER`)
 
 - **Perfil:** Dueño de "Frutas El Paraíso", frutería en Centro Monterrey.
 - **Necesidad:** Dar visibilidad a su negocio y gestionar qué productos ofrece y a qué precio.
 - **Journey objetivo:** Registrarse → configurar negocio → activar productos del catálogo global → recibir contactos/pedidos.
-- **Cuenta demo:** `frutas@elparaiso.mx`
+- **Cuenta demo:** ver [README.md](./README.md) (solo entorno local)
 
 ### 3. Admin — Operador de plataforma (`ADMIN`)
 
 - **Perfil:** Equipo interno de LaBorregaMarket.
 - **Necesidad:** Gestionar catálogos, usuarios, permisos y auditar actividad.
 - **Journey objetivo:** Login admin → revisar catálogos → verificar proveedores → consultar bitácora.
-- **Cuenta demo:** `admin@laborregamarket.mx`
-
-> **Password demo para todas las cuentas:** `Demo1234!`
+- **Cuenta demo:** ver [README.md](./README.md) (solo entorno local)
 
 ---
 
@@ -189,7 +187,7 @@ Modelo central del producto: **un catálogo global administrado por la plataform
 | ORM | Prisma 6 |
 | Base de datos | PostgreSQL 15+ |
 | Autenticación | JWT (jsonwebtoken) + bcrypt |
-| Mapas | Leaflet + teselas OSM (F5). Sin Google Maps JS en `/explorar` |
+| Mapas | Leaflet + teselas OpenStreetMap |
 | Email | Resend |
 | Media | Cloudinary |
 | Rate limit | Upstash Redis (prod) / in-memory (local) |
@@ -298,22 +296,21 @@ Cada proveedor tiene entradas `ProviderProduct` con variación de precio (~±10%
 
 ## Modelo open source
 
-LaBorregaMarket adopta prácticas de documentación y transparencia del ecosistema open source:
+LaBorregaMarket es un proyecto público con licencia MIT.
 
-| Práctica | Implementación en LaBorregaMarket |
-|----------|-----------------------------------|
-| README como punto de entrada | `README.md` — setup, stack, rutas |
-| Product doc para stakeholders | Este archivo (`PRODUCT.md`) |
-| Esquema como contrato | `prisma/schema.prisma` — fuente de verdad del dominio |
-| Seed reproducible | `prisma/seed.ts` — demo consistente para QA y demos |
-| Convenciones de contribución | Roadmap explícito, gaps documentados |
-| Versionado semántico | `0.5.0` implementado; pagos/PWA en F6+ |
-
-**Nota:** El código es privado, pero la documentación de producto sigue el modelo de claridad, trazabilidad y reproducibilidad típico de proyectos OSS (CNCF, Mozilla, GitLab product handbook).
+| Práctica | Dónde vive |
+|----------|------------|
+| Punto de entrada | `README.md` |
+| Visión de producto | Este archivo (`PRODUCT.md`) |
+| Cómo contribuir | `CONTRIBUTING.md` |
+| Reportar vulnerabilidades | `SECURITY.md` |
+| Esquema como contrato | `prisma/schema.prisma` |
+| Seed reproducible (solo local) | `prisma/seed.ts` |
+| Versionado | `0.5.0`; pagos y PWA en el roadmap |
 
 ---
 
-## Referencias internas
+## Referencias
 
 | Documento | Ubicación |
 |-----------|-----------|
@@ -323,8 +320,6 @@ LaBorregaMarket adopta prácticas de documentación y transparencia del ecosiste
 | Variables de entorno | `.env.example` |
 | Protección de rutas | `src/middleware.ts` |
 | Permisos por módulo | `src/lib/auth/permissions.ts` |
-| Índice PM (lectura mínima) | `Administrador de producto/Product Manager/outputs/laborregamarket/README.md` |
-| Roadmap y fase activa | `.../laborregamarket/STATUS.md` y `.../laborregamarket/fase-5/` |
 
 ---
 
@@ -332,8 +327,5 @@ LaBorregaMarket adopta prácticas de documentación y transparencia del ecosiste
 
 **Producto:** LaBorregaMarket  
 **Mercado inicial:** Monterrey, Nuevo León, México  
-**Categoría:** Marketplace local · Agro / Retail fresco
-
----
-
-*Documento generado para presentación a Product Management. Actualizar con cada release significativo.*
+**Categoría:** Marketplace local · Agro / Retail fresco  
+**Código:** [github.com/dantelokito/BorregaMarket](https://github.com/dantelokito/BorregaMarket)
