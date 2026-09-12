@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, ProductCategory, ProductUnit, SystemModule, AuditAction } from "@prisma/client";
+import { Prisma, PrismaClient, UserRole, ProductCategory, ProductUnit, SystemModule, AuditAction } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { isDemoSeedAllowed } from "../src/lib/seed/demo-guard";
 
@@ -117,7 +117,7 @@ async function main() {
   async function upsertProviderByName(
     userId: string,
     businessName: string,
-    data: Omit<Parameters<typeof prisma.provider.create>[0]["data"], "userId" | "businessName">
+    data: Omit<Prisma.ProviderUncheckedCreateInput, "userId" | "businessName">
   ) {
     const existing = await prisma.provider.findFirst({
       where: { userId, businessName },
