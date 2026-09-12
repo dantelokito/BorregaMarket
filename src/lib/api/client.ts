@@ -4,7 +4,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
-    public details?: FieldError[]
+    public details?: FieldError[],
+    public code?: string
   ) {
     super(message);
     this.name = "ApiError";
@@ -14,8 +15,23 @@ export class ApiError extends Error {
 interface ApiEnvelope<T> {
   data?: T;
   meta?: PaginationMeta;
-  error?: string;
+  error?: string | { code?: string; message?: string; details?: FieldError[] };
   details?: FieldError[];
+}
+
+function parseApiError(body: ApiEnvelope<unknown>, fallback: string) {
+  const err = body.error;
+  if (typeof err === "string") {
+    return { message: err, code: undefined as string | undefined, details: body.details };
+  }
+  if (err && typeof err === "object") {
+    return {
+      message: err.message || fallback,
+      code: err.code,
+      details: body.details ?? err.details,
+    };
+  }
+  return { message: fallback, code: undefined as string | undefined, details: body.details };
 }
 
 export interface ApiResult<T> {
@@ -27,7 +43,8 @@ async function parseResponse<T>(res: Response): Promise<ApiResult<T>> {
   const body: ApiEnvelope<T> = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    throw new ApiError(body.error ?? "Error de servidor", res.status, body.details);
+    const parsed = parseApiError(body, "Error de servidor");
+    throw new ApiError(parsed.message, res.status, parsed.details, parsed.code);
   }
 
   return { data: body.data as T, meta: body.meta };

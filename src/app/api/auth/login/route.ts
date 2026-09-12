@@ -4,7 +4,8 @@ import { SystemModule, AuditAction } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
 import { signToken } from "@/lib/auth/token";
-import { setSessionCookie } from "@/lib/auth/cookie";
+import { setSessionCookie, setActiveProviderCookie } from "@/lib/auth/cookie";
+import { listOwnedProviders } from "@/lib/providers/owned-provider";
 import { writeAuditLog } from "@/lib/audit";
 import { ok, apiError, fromZodError } from "@/lib/api/response";
 import {
@@ -65,6 +66,12 @@ export async function POST(request: NextRequest) {
     });
 
     setSessionCookie(response, token);
+    if (user.role === "PROVIDER") {
+      const first = (await listOwnedProviders(user.id))[0];
+      if (first) {
+        setActiveProviderCookie(response, first.id);
+      }
+    }
 
     return response;
   } catch (err) {

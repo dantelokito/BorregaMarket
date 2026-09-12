@@ -1,8 +1,8 @@
 # LaBorregaMarket — Product Overview
 
-> **Versión del producto:** 0.5.0  
-> **Última actualización:** 26/08/2026  
-> **Estado:** Pre-lanzamiento — mapa OSM, catálogo, pedidos pickup y marca de proveedor en código  
+> **Versión del producto:** 0.11.0  
+> **Última actualización:** 12/09/2026  
+> **Estado:** Pre-lanzamiento — User 1:N sucursales, cookie activa, reportes globales, media disco  
 > **Licencia:** [MIT](./LICENSE)
 
 ---
@@ -189,7 +189,7 @@ Modelo central del producto: **un catálogo global administrado por la plataform
 | Autenticación | JWT (jsonwebtoken) + bcrypt |
 | Mapas | Leaflet + teselas OpenStreetMap |
 | Email | Resend |
-| Media | Cloudinary |
+| Media | Disco local (`UPLOADS_DIR`; Cloudinary no es Must) |
 | Rate limit | Upstash Redis (prod) / in-memory (local) |
 | Jobs async | Inngest (+ WhatsApp Cloud API opcional) |
 | Validación | Zod |
@@ -205,8 +205,8 @@ Modelo central del producto: **un catálogo global administrado por la plataform
 
 | Negocio | Ubicación | Verificado |
 |---------|-----------|------------|
-| Frutas El Paraíso | Centro, Monterrey | ✅ |
-| Campo Verde Frutería | San Pedro, Monterrey | ✅ |
+| Frutas El Paraíso | Centro + Tecnológico (mismo usuario) | ✅ |
+| Campo Verde Frutería | San Pedro (un usuario, N=1) | ✅ |
 | La Borrega Agrícola | Santa Catarina | ❌ |
 
 ### Catálogo global (15 productos)
@@ -259,7 +259,22 @@ Cada proveedor tiene entradas `ProviderProduct` con variación de precio (~±10%
 - [x] Producto inhabilitado omitido en canales de venta (409 al confirmar)
 - [x] Colores de marca PROVIDER + tema en `GET /api/auth/session`
 
-### Fase 6+ — Canales y monetización
+### Fases 6–10 — Operación, geo, admin y media disco
+
+- [x] Pedidos, POS, dashboard, reportes por sucursal (F3/F10)
+- [x] Explorar geo (Leaflet/OSM; pin URL F11)
+- [x] Admin catálogo + flags; media en disco (`UPLOADS_DIR`)
+- [x] CI GitHub: lint + Vitest + `next build` (sin postgres/Playwright en el YAML)
+
+### Fase 11 — Multi-frutería y reportes generales (v0.11.0)
+
+- [x] Relación User 1:N Provider (migración drop unique `userId`)
+- [x] Cookie `lbm_active_provider` + switcher solo si N>1
+- [x] `GET /api/provider/reports/global` (200 si N>1; 403 si N=1)
+- [x] Seed El Paraíso ×2 + Campo Verde N=1
+- [x] Explorar lista cards por Provider (honra `lat`/`lng` de URL)
+
+### Fase 12+ — Canales y monetización
 
 - [ ] PWA / app móvil
 - [ ] Pagos en línea (pasarela)
@@ -306,7 +321,7 @@ LaBorregaMarket es un proyecto público con licencia MIT.
 | Reportar vulnerabilidades | `SECURITY.md` |
 | Esquema como contrato | `prisma/schema.prisma` |
 | Seed reproducible (solo local) | `prisma/seed.ts` |
-| Versionado | `0.5.0`; pagos y PWA en el roadmap |
+| Versionado | `0.11.0`; pagos y PWA en el roadmap |
 
 ---
 

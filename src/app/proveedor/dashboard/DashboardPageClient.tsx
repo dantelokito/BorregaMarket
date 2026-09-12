@@ -15,6 +15,7 @@ import { parseDashboardView } from "@/lib/reports/period";
 import { currentMonthShortcut } from "@/lib/reports/date-range";
 import { DashboardViewSwitcher } from "@/components/provider/reports/DashboardViewSwitcher";
 import { ReportsView } from "@/components/provider/reports/ReportsView";
+import { ActiveStoreEyebrow } from "@/components/provider/ActiveStoreEyebrow";
 
 function KpiCard({ label, amount, count }: { label: string; amount: string; count: number }) {
   return (
@@ -249,6 +250,7 @@ function DashboardShell() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
+      <ActiveStoreEyebrow />
       <h1 className="no-print mb-4 text-2xl font-bold">Ventas</h1>
       <DashboardViewSwitcher view={view} onChange={setView} />
       {view === "reportes" ? <ReportsView /> : <DashboardSummaryView />}

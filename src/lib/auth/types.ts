@@ -7,6 +7,7 @@ export const UserRole = {
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export const TOKEN_COOKIE = "lbm_token";
+export const ACTIVE_PROVIDER_COOKIE = "lbm_active_provider";
 
 export interface JwtPayload {
   sub: string;

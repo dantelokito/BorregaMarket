@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SessionPersistBanner } from "@/components/auth/SessionPersistBanner";
 import { DemoAccountsBlock } from "@/components/auth/DemoAccountsBlock";
+import { useProviderScope } from "@/hooks/useProviderScope";
 
 function LoginForm() {
   const router = useRouter();
@@ -21,6 +22,7 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [sessionLost, setSessionLost] = useState(false);
   const [loading, setLoading] = useState(false);
+  const { reload: reloadProviderScope } = useProviderScope();
 
   async function submitLogin() {
     setLoading(true);
@@ -37,6 +39,8 @@ function LoginForm() {
         setSessionLost(true);
         return;
       }
+
+      await reloadProviderScope();
 
       const roleRedirects: Record<string, string> = {
         ADMIN: "/admin",

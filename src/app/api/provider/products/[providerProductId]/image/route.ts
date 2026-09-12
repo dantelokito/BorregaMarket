@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
-import { UserRole } from "@prisma/client";
-import { getSession, requireRole, AuthError } from "@/lib/auth/session";
+import { AuthError } from "@/lib/auth/session";
+import { applyActiveProviderCookie, requireActiveProvider } from "@/lib/auth/active-provider";
 import { ok, apiError, handleRouteError } from "@/lib/api/response";
 import {
   uploadProviderProductImage,
@@ -15,7 +15,7 @@ export async function POST(
   { params }: { params: Promise<{ providerProductId: string }> }
 ) {
   try {
-    const session = requireRole(getSession(request), UserRole.PROVIDER);
+    const ctx = await requireActiveProvider(request);
     const { providerProductId } = await params;
     const form = await request.formData();
     const file = form.get("file");
@@ -30,12 +30,13 @@ export async function POST(
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined;
 
     const result = await uploadProviderProductImage({
-      userId: session.sub,
+      userId: ctx.session.sub,
+      providerId: ctx.provider.id,
       providerProductId,
       file,
       ipAddress: ip,
     });
-    return ok(result);
+    return applyActiveProviderCookie(ok(result), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) {
       return apiError(err.message, err.status);

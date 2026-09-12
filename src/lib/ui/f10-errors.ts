@@ -10,7 +10,7 @@ export function mapF10ApiError(
   if (err.status === 403) {
     return context === "module"
       ? "Sin permiso para este módulo"
-      : "Esta vista es solo para tu negocio";
+      : "Este recurso no pertenece a la frutería activa";
   }
   if (err.status === 409) {
     const slug = err.details?.some((d) => d.field === "slug");

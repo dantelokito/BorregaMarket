@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { AuthError } from "@/lib/auth/session";
-import { apiError, handleRouteError } from "@/lib/api/response";
+import { apiCodedError, apiError, handleRouteError } from "@/lib/api/response";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
 import { AddressNotFoundError } from "@/lib/services/address.service";
 import {
@@ -12,6 +12,13 @@ import {
 } from "@/lib/orders/errors";
 
 export function handleOrderRouteError(err: unknown): NextResponse {
+  if (
+    err instanceof Error &&
+    err.name === "GlobalReportsNotAvailableError" &&
+    "code" in err
+  ) {
+    return apiCodedError(String((err as { code: string }).code), err.message, 403);
+  }
   if (err instanceof AuthError) {
     return apiError(err.message, err.status);
   }

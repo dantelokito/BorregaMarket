@@ -105,7 +105,7 @@ model User {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  provider  Provider?
+  providers Provider[]
   orders    Order[]       @relation("ClientOrders")
   reviews   Review[]      @relation("ClientReviews")
   addresses UserAddress[]
@@ -140,7 +140,7 @@ model UserAddress {
 
 model Provider {
   id                     String   @id @default(cuid())
-  userId                 String   @unique @map("user_id")
+  userId                 String   @map("user_id")
   businessName           String   @map("business_name")
   description            String?
   address                String
@@ -178,6 +178,7 @@ model Provider {
   orders           Order[]
   reviews          Review[]
 
+  @@index([userId])
   @@index([city])
   @@index([businessName])
   @@index([isActive, isVerified])

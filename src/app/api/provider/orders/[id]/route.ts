@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
-import { UserRole } from "@prisma/client";
-import { getSession, requireRole } from "@/lib/auth/session";
+import { applyActiveProviderCookie, requireActiveProvider } from "@/lib/auth/active-provider";
 import { ok } from "@/lib/api/response";
 import { handleOrderRouteError } from "@/lib/orders/http";
 import { transitionStatus } from "@/lib/services/order.service";
@@ -20,16 +19,17 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = requireRole(getSession(request), UserRole.PROVIDER);
+    const ctx = await requireActiveProvider(request);
     const { id } = await params;
     const body = patchOrderStatusSchema.parse(await request.json());
     const order = await transitionStatus({
       orderId: id,
       nextStatus: body.status,
-      session,
+      session: ctx.session,
+      activeProviderId: ctx.provider.id,
       ipAddress: clientIp(request),
     });
-    return ok(order);
+    return applyActiveProviderCookie(ok(order), ctx.provider.id);
   } catch (err) {
     return handleOrderRouteError(err);
   }

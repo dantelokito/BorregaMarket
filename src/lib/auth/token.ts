@@ -4,6 +4,7 @@ import { USER_ROLES, type JwtPayload, type UserRole } from "./types";
 
 export {
   TOKEN_COOKIE,
+  ACTIVE_PROVIDER_COOKIE,
   UserRole,
   type JwtPayload,
 } from "./types";

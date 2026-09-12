@@ -82,3 +82,11 @@ export function resolveExploreCenter({
     source: "san-nicolas",
   };
 }
+
+/** Chip: «San Nicolás» solo si el pin es el default; un pin URL no hereda esa etiqueta. */
+export function exploreChipFallbackLabel(lat: number, lng: number): string {
+  const nearSn =
+    Math.abs(lat - SAN_NICOLAS_CENTER.lat) < 0.002 &&
+    Math.abs(lng - SAN_NICOLAS_CENTER.lng) < 0.002;
+  return nearSn ? "San Nicolás" : "Ubicación";
+}

@@ -1,15 +1,14 @@
 import { NextRequest } from "next/server";
-import { UserRole } from "@prisma/client";
-import { getSession, requireRole } from "@/lib/auth/session";
+import { applyActiveProviderCookie, requireActiveProvider } from "@/lib/auth/active-provider";
 import { ok } from "@/lib/api/response";
 import { handleOrderRouteError } from "@/lib/orders/http";
 import { getProviderReport, getProviderReportRange } from "@/lib/services/dashboard.service";
 import { parseReportsRequest } from "@/lib/validators/report";
 
-/** Proveedor: reporte grain F6 o rango from/to F10 */
+/** Proveedor: reporte grain F6 o rango from/to F10 de la sucursal activa */
 export async function GET(request: NextRequest) {
   try {
-    const session = requireRole(getSession(request), UserRole.PROVIDER);
+    const ctx = await requireActiveProvider(request);
     const search = new URL(request.url).searchParams;
     const query = parseReportsRequest({
       grain: search.get("grain"),
@@ -20,19 +19,21 @@ export async function GET(request: NextRequest) {
     });
     if (query.mode === "range") {
       const data = await getProviderReportRange({
-        userId: session.sub,
+        userId: ctx.session.sub,
+        providerId: ctx.provider.id,
         from: query.from,
         to: query.to,
         productIds: query.productIds,
       });
-      return ok(data);
+      return applyActiveProviderCookie(ok(data), ctx.provider.id);
     }
     const data = await getProviderReport({
-      userId: session.sub,
+      userId: ctx.session.sub,
+      providerId: ctx.provider.id,
       grain: query.grain,
       date: query.date,
     });
-    return ok(data);
+    return applyActiveProviderCookie(ok(data), ctx.provider.id);
   } catch (err) {
     return handleOrderRouteError(err);
   }

@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { assertRateLimit } from "@/lib/rate-limit/token-bucket";
 import { slugify } from "@/lib/validation/plain-text";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+import { findOwnedProvider } from "@/lib/providers/owned-provider";
 import type {
   CreateLocalProductInput,
   PatchLocalProductInput,
@@ -84,10 +85,11 @@ function serializeLocal(row: {
 
 export async function createLocalProduct(params: {
   userId: string;
+  providerId?: string;
   input: CreateLocalProductInput;
   ipAddress?: string;
 }) {
-  const provider = await prisma.provider.findUnique({ where: { userId: params.userId } });
+  const provider = await findOwnedProvider(params.userId, params.providerId);
   if (!provider) throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
 
   assertRateLimit(`local-product:${provider.id}`, 30, 60 * 60 * 1000);
@@ -140,11 +142,12 @@ export async function createLocalProduct(params: {
 
 export async function updateLocalProduct(params: {
   userId: string;
+  providerId?: string;
   providerProductId: string;
   input: PatchLocalProductInput;
   ipAddress?: string;
 }) {
-  const provider = await prisma.provider.findUnique({ where: { userId: params.userId } });
+  const provider = await findOwnedProvider(params.userId, params.providerId);
   if (!provider) throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
 
   const row = await prisma.providerProduct.findUnique({

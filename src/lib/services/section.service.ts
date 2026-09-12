@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { assertRateLimit } from "@/lib/rate-limit/token-bucket";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+import { findOwnedProvider } from "@/lib/providers/owned-provider";
 import {
   CatalogConflictError,
   CatalogForbiddenError,
@@ -13,8 +14,8 @@ function normalizeName(name: string): string {
   return name.trim().toLowerCase();
 }
 
-export async function listProviderSections(userId: string) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
+export async function listProviderSections(userId: string, providerId?: string) {
+  const provider = await findOwnedProvider(userId, providerId);
   if (!provider) throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
 
   const sections = await prisma.providerSection.findMany({
@@ -33,10 +34,11 @@ export async function listProviderSections(userId: string) {
 
 export async function createProviderSection(params: {
   userId: string;
+  providerId?: string;
   name: string;
   ipAddress?: string;
 }) {
-  const provider = await prisma.provider.findUnique({ where: { userId: params.userId } });
+  const provider = await findOwnedProvider(params.userId, params.providerId);
   if (!provider) throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
 
   assertRateLimit(`section-create:${provider.id}`, 30, 60 * 60 * 1000);
@@ -81,12 +83,13 @@ export async function createProviderSection(params: {
 
 export async function updateProviderSection(params: {
   userId: string;
+  providerId?: string;
   sectionId: string;
   name?: string;
   sortOrder?: number;
   ipAddress?: string;
 }) {
-  const provider = await prisma.provider.findUnique({ where: { userId: params.userId } });
+  const provider = await findOwnedProvider(params.userId, params.providerId);
   if (!provider) throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
 
   const section = await prisma.providerSection.findUnique({ where: { id: params.sectionId } });
@@ -133,10 +136,11 @@ export async function updateProviderSection(params: {
 
 export async function reorderProviderSections(params: {
   userId: string;
+  providerId?: string;
   ids: string[];
   ipAddress?: string;
 }) {
-  const provider = await prisma.provider.findUnique({ where: { userId: params.userId } });
+  const provider = await findOwnedProvider(params.userId, params.providerId);
   if (!provider) throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
 
   const existing = await prisma.providerSection.findMany({
@@ -168,15 +172,16 @@ export async function reorderProviderSections(params: {
     details: { ids: params.ids },
   });
 
-  return listProviderSections(params.userId);
+  return listProviderSections(params.userId, params.providerId ?? provider.id);
 }
 
 export async function deleteProviderSection(params: {
   userId: string;
+  providerId?: string;
   sectionId: string;
   ipAddress?: string;
 }) {
-  const provider = await prisma.provider.findUnique({ where: { userId: params.userId } });
+  const provider = await findOwnedProvider(params.userId, params.providerId);
   if (!provider) throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
 
   const section = await prisma.providerSection.findUnique({

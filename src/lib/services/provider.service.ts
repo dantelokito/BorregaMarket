@@ -23,6 +23,7 @@ import {
   isHoursPublished,
   normalizeOpeningHours,
 } from "@/lib/providers/opening-hours";
+import { findOwnedProvider } from "@/lib/providers/owned-provider";
 
 export class ProviderConflictError extends Error {
   constructor(message = "Ya tienes un negocio registrado") {
@@ -178,8 +179,8 @@ export function buildWhere(filters: ListProvidersFilters): Prisma.ProviderWhereI
   };
 }
 
-export async function getProviderByUserId(userId: string) {
-  return prisma.provider.findUnique({ where: { userId } });
+export async function getProviderByUserId(userId: string, providerId?: string | null) {
+  return findOwnedProvider(userId, providerId);
 }
 
 export async function createProvider(
@@ -187,11 +188,6 @@ export async function createProvider(
   data: CreateProviderInput,
   ipAddress?: string
 ) {
-  const existing = await prisma.provider.findUnique({ where: { userId } });
-  if (existing) {
-    throw new ProviderConflictError();
-  }
-
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
     throw new ProviderNotFoundError("Usuario no encontrado");
@@ -410,6 +406,8 @@ export async function listAdminProviders(
         isActive: p.isActive,
         offersWholesale: p.offersWholesale,
         offersDelivery: p.offersDelivery,
+        userId: p.userId,
+        ownerEmail: userEmail,
         userEmail,
         /** US-NOTIFY-04: badge admin cuando el negocio no puede recibir email */
         hasValidEmail,
@@ -594,10 +592,11 @@ export function toProviderSettings(provider: Parameters<typeof serializeProvider
 
 export async function updateProviderSettings(params: {
   userId: string;
+  providerId?: string;
   input: PatchProviderSettingsInput;
   ipAddress?: string;
 }) {
-  const provider = await prisma.provider.findUnique({ where: { userId: params.userId } });
+  const provider = await findOwnedProvider(params.userId, params.providerId);
   if (!provider) {
     throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
   }

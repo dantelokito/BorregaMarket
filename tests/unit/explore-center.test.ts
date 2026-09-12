@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveExploreCenter } from "@/lib/maps/explore-center";
+import { exploreChipFallbackLabel, resolveExploreCenter } from "@/lib/maps/explore-center";
 import { SAN_NICOLAS_CENTER } from "@/lib/maps/constants";
 import type { UserAddress } from "@/lib/api/types";
 
@@ -66,6 +66,13 @@ describe("resolveExploreCenter", () => {
       guest: true,
     });
     expect(center).toMatchObject({ lat: 25.1, lng: -100.9, radiusKm: 3, source: "stored" });
+  });
+
+  it("does not label a Monterrey URL pin as San Nicolás", () => {
+    expect(exploreChipFallbackLabel(25.6714, -100.3089)).toBe("Ubicación");
+    expect(exploreChipFallbackLabel(SAN_NICOLAS_CENTER.lat, SAN_NICOLAS_CENTER.lng)).toBe(
+      "San Nicolás"
+    );
   });
 
   it("defaults to San Nicolás with 10 km", () => {

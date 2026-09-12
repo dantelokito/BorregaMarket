@@ -23,11 +23,12 @@ import { resolveProviderByUserId } from "@/lib/services/order.service";
 
 export async function createPosSale(params: {
   userId: string;
+  providerId?: string;
   input: CreatePosSaleInput;
   idempotencyKey: string;
   ipAddress?: string;
 }): Promise<{ replay: boolean; order: ReturnType<typeof serializeOrder> }> {
-  const provider = await resolveProviderByUserId(params.userId);
+  const provider = await resolveProviderByUserId(params.userId, params.providerId);
 
   const existing = await prisma.order.findUnique({
     where: {

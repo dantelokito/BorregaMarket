@@ -2,6 +2,7 @@ import { AuditAction, ProductScope, SystemModule } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+import { findOwnedProvider } from "@/lib/providers/owned-provider";
 import {
   CatalogForbiddenError,
   CatalogNotFoundError,
@@ -15,8 +16,8 @@ export interface UpsertProviderProductInput {
   sectionId?: string;
 }
 
-export async function getProviderCatalog(userId: string) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
+export async function getProviderCatalog(userId: string, providerId?: string) {
+  const provider = await findOwnedProvider(userId, providerId);
   if (!provider) {
     throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
   }
@@ -78,9 +79,10 @@ export async function getProviderCatalog(userId: string) {
 export async function upsertProviderProduct(
   userId: string,
   input: UpsertProviderProductInput,
-  ipAddress?: string
+  ipAddress?: string,
+  providerId?: string
 ) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
+  const provider = await findOwnedProvider(userId, providerId);
   if (!provider) {
     throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
   }

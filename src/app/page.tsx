@@ -45,7 +45,7 @@ export default function HomePage() {
             {
               icon: <MapPin className="text-[var(--brand)]" size={28} />,
               title: "Mapa interactivo",
-              desc: "Visualiza fruterías cercanas con precios en tiempo real, estilo Airbnb.",
+              desc: "Visualiza fruterías cercanas con precios en tiempo real",
             },
             {
               icon: <Store className="text-[var(--brand)]" size={28} />,

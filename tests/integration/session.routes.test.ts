@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { UserRole } from "@prisma/client";
 
 const getSession = vi.fn();
-const getAuthSessionPayload = vi.fn();
+const resolveAuthSession = vi.fn();
 
 vi.mock("@/lib/auth/session", async () => {
   const actual = await vi.importActual<typeof import("@/lib/auth/session")>(
@@ -16,7 +16,7 @@ vi.mock("@/lib/auth/session", async () => {
 });
 
 vi.mock("@/lib/services/session.service", () => ({
-  getAuthSessionPayload: (...args: unknown[]) => getAuthSessionPayload(...args),
+  resolveAuthSession: (...args: unknown[]) => resolveAuthSession(...args),
 }));
 
 import { GET } from "@/app/api/auth/session/route";
@@ -32,10 +32,17 @@ describe("GET /api/auth/session", () => {
 
   it("returns 200 for guests and sets no-store", async () => {
     getSession.mockReturnValue(null);
-    getAuthSessionPayload.mockResolvedValue({
-      authenticated: false,
-      role: null,
-      brand: null,
+    resolveAuthSession.mockResolvedValue({
+      payload: {
+        authenticated: false,
+        role: null,
+        brand: null,
+        providerCount: 0,
+        activeProviderId: null,
+        providers: [],
+      },
+      cookieProviderId: null,
+      cookieCorrected: false,
     });
     const res = await GET(jsonRequest("/api/auth/session"));
     expect(res.status).toBe(200);
@@ -52,14 +59,21 @@ describe("GET /api/auth/session", () => {
       email: "p@test.com",
       name: "Carlos",
     });
-    getAuthSessionPayload.mockResolvedValue({
-      authenticated: true,
-      role: "PROVIDER",
-      brand: {
-        primaryColor: "#1B5E20",
-        secondaryColor: "#0D47A1",
-        source: "provider",
+    resolveAuthSession.mockResolvedValue({
+      payload: {
+        authenticated: true,
+        role: "PROVIDER",
+        brand: {
+          primaryColor: "#1B5E20",
+          secondaryColor: "#0D47A1",
+          source: "provider",
+        },
+        providerCount: 1,
+        activeProviderId: "p1",
+        providers: [],
       },
+      cookieProviderId: "p1",
+      cookieCorrected: false,
     });
     const res = await GET(jsonRequest("/api/auth/session"));
     expect(res.status).toBe(200);

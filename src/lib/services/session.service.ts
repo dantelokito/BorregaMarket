@@ -1,6 +1,13 @@
 import type { JwtPayload } from "@/lib/auth/token";
-import prisma from "@/lib/prisma";
-import { canonicalizeHex, isBrandPairValid } from "@/lib/color/contrast";
+import { pickActiveProvider, sessionBrandFromProvider } from "@/lib/auth/active-provider";
+import { listOwnedProviders } from "@/lib/providers/owned-provider";
+
+export type AuthSessionProviderRow = {
+  id: string;
+  businessName: string;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+};
 
 export type AuthSessionPayload = {
   authenticated: boolean;
@@ -10,35 +17,92 @@ export type AuthSessionPayload = {
     secondaryColor: string;
     source: "provider";
   } | null;
+  providerCount: number;
+  activeProviderId: string | null;
+  providers: AuthSessionProviderRow[];
+};
+
+export type SessionResolution = {
+  payload: AuthSessionPayload;
+  cookieProviderId: string | null;
+  cookieCorrected: boolean;
 };
 
 export async function getAuthSessionPayload(
-  session: JwtPayload | null
+  session: JwtPayload | null,
+  cookieProviderId?: string | null
 ): Promise<AuthSessionPayload> {
+  const resolved = await resolveAuthSession(session, cookieProviderId);
+  return resolved.payload;
+}
+
+export async function resolveAuthSession(
+  session: JwtPayload | null,
+  cookieProviderId?: string | null
+): Promise<SessionResolution> {
   if (!session) {
-    return { authenticated: false, role: null, brand: null };
+    return {
+      payload: {
+        authenticated: false,
+        role: null,
+        brand: null,
+        providerCount: 0,
+        activeProviderId: null,
+        providers: [],
+      },
+      cookieProviderId: null,
+      cookieCorrected: false,
+    };
   }
 
   if (session.role !== "PROVIDER") {
-    return { authenticated: true, role: session.role, brand: null };
+    return {
+      payload: {
+        authenticated: true,
+        role: session.role,
+        brand: null,
+        providerCount: 0,
+        activeProviderId: null,
+        providers: [],
+      },
+      cookieProviderId: null,
+      cookieCorrected: false,
+    };
   }
 
-  const provider = await prisma.provider.findUnique({
-    where: { userId: session.sub },
-    select: { primaryColor: true, secondaryColor: true },
-  });
-
-  if (!provider || !isBrandPairValid(provider.primaryColor, provider.secondaryColor)) {
-    return { authenticated: true, role: "PROVIDER", brand: null };
+  const providers = await listOwnedProviders(session.sub);
+  if (providers.length === 0) {
+    return {
+      payload: {
+        authenticated: true,
+        role: "PROVIDER",
+        brand: null,
+        providerCount: 0,
+        activeProviderId: null,
+        providers: [],
+      },
+      cookieProviderId: null,
+      cookieCorrected: Boolean(cookieProviderId),
+    };
   }
+
+  const { provider, cookieCorrected } = pickActiveProvider(providers, cookieProviderId ?? null);
 
   return {
-    authenticated: true,
-    role: "PROVIDER",
-    brand: {
-      primaryColor: canonicalizeHex(provider.primaryColor!)!,
-      secondaryColor: canonicalizeHex(provider.secondaryColor!)!,
-      source: "provider",
+    payload: {
+      authenticated: true,
+      role: "PROVIDER",
+      brand: sessionBrandFromProvider(provider),
+      providerCount: providers.length,
+      activeProviderId: provider.id,
+      providers: providers.map((p) => ({
+        id: p.id,
+        businessName: p.businessName,
+        primaryColor: p.primaryColor,
+        secondaryColor: p.secondaryColor,
+      })),
     },
+    cookieProviderId: provider.id,
+    cookieCorrected,
   };
 }

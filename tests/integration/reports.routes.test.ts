@@ -7,6 +7,11 @@ const getSession = vi.fn();
 const getProviderReport = vi.fn();
 const renderProviderReportPdf = vi.fn();
 
+vi.mock("@/lib/providers/owned-provider", () => ({
+  listOwnedProviders: vi.fn().mockResolvedValue([{ id: "prov1", userId: "u2" }]),
+  findOwnedProvider: vi.fn().mockResolvedValue({ id: "prov1", userId: "u2" }),
+}));
+
 vi.mock("@/lib/auth/session", async () => {
   const actual = await vi.importActual<typeof import("@/lib/auth/session")>(
     "@/lib/auth/session"
@@ -145,6 +150,7 @@ describe("provider reports routes", () => {
     expect(body.data.kpis.bySource.MARKETPLACE.orderCount).toBe(0);
     expect(getProviderReport).toHaveBeenCalledWith({
       userId: "u2",
+      providerId: "prov1",
       grain: "day",
       date: "2026-08-10",
     });

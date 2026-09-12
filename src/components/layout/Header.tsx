@@ -10,6 +10,7 @@ import { clampRadiusKm, type ProviderCategory } from "@/lib/api/providers";
 import { isInMexico } from "@/lib/geo/bounds";
 import { DEFAULT_RADIUS_KM } from "@/lib/maps/constants";
 import type { AuthUser } from "@/lib/api/types";
+import { ProviderHeaderContext } from "@/components/provider/ProviderHeaderContext";
 
 interface HeaderProps {
   user?: AuthUser | null;
@@ -83,6 +84,7 @@ export function Header({ user = null }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const onExplore = pathname === "/explorar" || pathname?.startsWith("/explorar?");
+  const onProviderPanel = pathname?.startsWith("/proveedor") ?? false;
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -109,7 +111,11 @@ export function Header({ user = null }: HeaderProps) {
           </span>
         </Link>
 
-        {onExplore ? (
+        {onProviderPanel ? (
+          <div className="mx-4 w-full max-w-[480px] sm:w-auto">
+            <ProviderHeaderContext />
+          </div>
+        ) : onExplore ? (
           <div className="mx-4 w-full max-w-[480px]">
             <Suspense
               fallback={

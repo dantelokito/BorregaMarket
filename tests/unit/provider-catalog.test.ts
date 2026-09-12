@@ -103,7 +103,7 @@ describe("getProviderDetail", () => {
 describe("updateProviderSettings brand", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    prismaMock.provider.findUnique.mockResolvedValue({
+    prismaMock.provider.findFirst.mockResolvedValue({
       id: "p1",
       userId: "u2",
       isVerified: false,
