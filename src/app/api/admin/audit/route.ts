@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
-import { UserRole, SystemModule, AuditAction } from "@prisma/client";
-import { getSession, requireRole, AuthError } from "@/lib/auth/session";
+import { SystemModule, AuditAction } from "@prisma/client";
+import { AuthError } from "@/lib/auth/session";
+import { requireAdminModule } from "@/lib/auth/require-admin-module";
 import { paginated, apiError } from "@/lib/api/response";
 import { parsePaginationParams } from "@/lib/services/pagination";
 import { listAuditLogs } from "@/lib/services/audit.service";
@@ -11,7 +12,7 @@ const VALID_ACTIONS = Object.values(AuditAction);
 /** Admin: bitácora de actividad paginada */
 export async function GET(request: NextRequest) {
   try {
-    requireRole(getSession(request), UserRole.ADMIN);
+    await requireAdminModule(request, SystemModule.AUDIT, "view");
     const { searchParams } = new URL(request.url);
     const { page, limit, skip } = parsePaginationParams(searchParams, {
       defaultLimit: 20,

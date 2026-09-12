@@ -12,6 +12,7 @@ import {
   isValidHex,
 } from "@/lib/color/contrast";
 import { Button } from "@/components/ui/Button";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useToast } from "@/components/ui/Toast";
 
 const PLATFORM_PRIMARY = "#e23744";
@@ -24,19 +25,29 @@ export function BrandColorPicker() {
   const [primary, setPrimary] = useState("");
   const [secondary, setSecondary] = useState("");
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
+  function load() {
+    setLoading(true);
+    setLoadError("");
     getMyBusiness()
       .then(({ data }) => {
         setPrimary(data.primaryColor ?? "");
         setSecondary(data.secondaryColor ?? "");
       })
-      .catch(() => {
+      .catch((err) => {
         setPrimary("");
         setSecondary("");
+        setLoadError(
+          err instanceof ApiError ? err.message : "No pudimos cargar los colores de tu marca"
+        );
       })
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    load();
   }, []);
 
   const primaryOk = !primary || (isValidHex(primary) && isPrimaryContrastValid(primary));
@@ -183,10 +194,11 @@ export function BrandColorPicker() {
         )}
       </div>
 
-      {error && (
-        <p className="text-sm text-red-600" role="alert">
-          {error}
-        </p>
+      {(loadError || error) && (
+        <ErrorBanner
+          message={loadError || error}
+          onRetry={loadError ? () => load() : () => void save()}
+        />
       )}
 
       <div className="flex flex-wrap gap-2">

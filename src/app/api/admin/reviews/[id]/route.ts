@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
-import { UserRole } from "@prisma/client";
-import { getSession, requireRole, AuthError } from "@/lib/auth/session";
+import { SystemModule } from "@prisma/client";
+import { AuthError } from "@/lib/auth/session";
+import { requireAdminModule } from "@/lib/auth/require-admin-module";
 import { ok, apiError, handleRouteError } from "@/lib/api/response";
 import {
   deleteReviewAsAdmin,
@@ -13,7 +14,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = requireRole(getSession(request), UserRole.ADMIN);
+    const session = await requireAdminModule(request, SystemModule.ORDERS, "delete");
     const { id } = await params;
     const data = await deleteReviewAsAdmin({
       reviewId: id,

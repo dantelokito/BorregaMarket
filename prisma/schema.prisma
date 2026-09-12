@@ -33,6 +33,11 @@ enum ProductUnit {
   GRAMO
 }
 
+enum ProductScope {
+  GLOBAL
+  LOCAL
+}
+
 enum OrderStatus {
   PENDING
   CONFIRMED
@@ -120,6 +125,7 @@ model UserAddress {
   lng              Float
   isFavorite       Boolean  @default(true) @map("is_favorite")
   isDefault        Boolean  @default(false) @map("is_default")
+  lastUsedAt       DateTime? @map("last_used_at")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
@@ -149,8 +155,14 @@ model Provider {
   reviewCount            Int      @default(0) @map("review_count")
   isActive               Boolean  @default(true) @map("is_active")
   isVerified             Boolean  @default(false) @map("is_verified")
+  verifiedAt             DateTime? @map("verified_at")
   preparationTimeMinutes Int      @default(20) @map("preparation_time_minutes")
   offersDelivery         Boolean  @default(false) @map("offers_delivery")
+  openingHours           Json?    @map("opening_hours")
+  whatsappEnabled        Boolean  @default(false) @map("whatsapp_enabled")
+  acceptsCardAtStore     Boolean  @default(false) @map("accepts_card_at_store")
+  offersWholesale        Boolean  @default(false) @map("offers_wholesale")
+  offersRetail           Boolean  @default(true) @map("offers_retail")
   googlePlaceId          String?  @map("google_place_id")
   googleMapsUrl          String?  @map("google_maps_url")
   googleReviewsEnabled   Boolean  @default(false) @map("google_reviews_enabled")
@@ -161,6 +173,8 @@ model Provider {
 
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   providerProducts ProviderProduct[]
+  sections         ProviderSection[]
+  ownedProducts    Product[]         @relation("OwnedLocalProducts")
   orders           Order[]
   reviews          Review[]
 
@@ -173,37 +187,61 @@ model Provider {
 // ─── CATÁLOGO GLOBAL DE PRODUCTOS (solo frutas, verduras, agrícolas) ─────────
 
 model Product {
-  id          String          @id @default(cuid())
-  name        String
-  slug        String          @unique
-  description String?
-  category    ProductCategory
-  unit        ProductUnit     @default(KG)
-  imageUrl    String?         @map("image_url")
-  isActive    Boolean         @default(true) @map("is_active")
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
+  id              String           @id @default(cuid())
+  name            String
+  slug            String
+  description     String?
+  category        ProductCategory?
+  unit            ProductUnit      @default(KG)
+  imageUrl        String?          @map("image_url")
+  isActive        Boolean          @default(true) @map("is_active")
+  scope           ProductScope     @default(GLOBAL)
+  ownerProviderId String?          @map("owner_provider_id")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
 
+  ownerProvider    Provider?         @relation("OwnedLocalProducts", fields: [ownerProviderId], references: [id], onDelete: Restrict)
   providerProducts ProviderProduct[]
   orderItems       OrderItem[]
 
+  @@index([ownerProviderId, scope])
   @@map("products")
 }
 
 // ─── PRODUCTOS POR PROVEEDOR (precio + activar/inactivar) ────────────────────
 
+model ProviderSection {
+  id             String   @id @default(cuid())
+  providerId     String   @map("provider_id")
+  name           String
+  nameNormalized String   @map("name_normalized")
+  sortOrder      Int      @default(0) @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  provider         Provider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerProducts ProviderProduct[]
+
+  @@unique([providerId, nameNormalized])
+  @@index([providerId, sortOrder])
+  @@map("provider_sections")
+}
+
 model ProviderProduct {
   id          String   @id @default(cuid())
   providerId  String   @map("provider_id")
   productId   String   @map("product_id")
+  sectionId   String?  @map("section_id")
   price       Decimal  @db.Decimal(10, 2)
   isAvailable Boolean  @default(true) @map("is_available")
   stock       Int?
+  imageUrl    String?  @map("image_url")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  provider   Provider    @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  provider   Provider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  section    ProviderSection?  @relation(fields: [sectionId], references: [id], onDelete: Restrict)
   orderItems OrderItem[]
 
   @@unique([providerId, productId])

@@ -13,6 +13,30 @@ import {
 
 const CATEGORIES = new Set<string>(Object.values(ProductCategory));
 
+/**
+ * Chip-style boolean query (F9): true/1 → filter; false/0/absent → no filter; else 400.
+ */
+function parseChipBoolean(
+  raw: string | null,
+  field: string
+): { ok: true; value: boolean | undefined } | { ok: false; response: Response } {
+  if (raw === null || raw === "") {
+    return { ok: true, value: undefined };
+  }
+  if (raw === "true" || raw === "1") {
+    return { ok: true, value: true };
+  }
+  if (raw === "false" || raw === "0") {
+    return { ok: true, value: undefined };
+  }
+  return {
+    ok: false,
+    response: apiError("Validation failed", 400, [
+      { field, message: "Debe ser true o false" },
+    ]),
+  };
+}
+
 /** API pública: listar fruterías para la vista tipo Airbnb */
 export async function GET(request: NextRequest) {
   try {
@@ -39,6 +63,18 @@ export async function GET(request: NextRequest) {
     const verifiedParam = searchParams.get("verified");
     const verified = verifiedParam === "true";
 
+    const wholesale = parseChipBoolean(
+      searchParams.get("offersWholesale"),
+      "offersWholesale"
+    );
+    if (!wholesale.ok) return wholesale.response;
+
+    const delivery = parseChipBoolean(
+      searchParams.get("offersDelivery"),
+      "offersDelivery"
+    );
+    if (!delivery.ok) return delivery.response;
+
     const geoQuery = geoListQuerySchema.parse({
       lat: searchParams.get("lat"),
       lng: searchParams.get("lng"),
@@ -53,6 +89,8 @@ export async function GET(request: NextRequest) {
         category: categoryParam
           ? (categoryParam as "FRUTA" | "VERDURA" | "AGRICOLA")
           : null,
+        ...(wholesale.value === true ? { offersWholesale: true } : {}),
+        ...(delivery.value === true ? { offersDelivery: true } : {}),
         geo: geoQuery.geo,
       },
       { page, limit, skip }

@@ -33,18 +33,60 @@ describe("geo providers routes", () => {
     expect(listProviders).not.toHaveBeenCalled();
   });
 
-  it("returns 400 when radiusKm is out of range", async () => {
+  it.each([
+    { radiusKm: 0.5, applied: 0.5 },
+    { radiusKm: 10, applied: 10 },
+    { radiusKm: 22, applied: 10 },
+    { radiusKm: 0, applied: 0.5 },
+    { radiusKm: 0.7, applied: 0.7 },
+  ])("clamps radiusKm=$radiusKm to $applied instead of 400", async ({ radiusKm, applied }) => {
+    listProviders.mockResolvedValue({
+      data: [],
+      meta: { page: 1, limit: 20, total: 0, totalPages: 0, radiusKm: applied },
+    });
     const res = await listGet(
-      jsonRequest("/api/providers?lat=25.67&lng=-100.31&radiusKm=30")
+      jsonRequest(`/api/providers?lat=25.67&lng=-100.31&radiusKm=${radiusKm}`)
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    expect(listProviders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        geo: expect.objectContaining({ radiusKm: applied }),
+      }),
+      expect.any(Object)
+    );
     const body = await res.json();
-    expect(body.details?.[0]?.field).toBe("radiusKm");
+    expect(body.meta.radiusKm).toBe(applied);
   });
 
-  it("returns 400 for coords outside Monterrey", async () => {
-    const res = await listGet(jsonRequest("/api/providers?lat=19.43&lng=-99.13"));
+  it("rejects q of 1 character with 400", async () => {
+    const res = await listGet(jsonRequest("/api/providers?q=m"));
     expect(res.status).toBe(400);
+    expect(listProviders).not.toHaveBeenCalled();
+  });
+
+  it("accepts CDMX coords with 200 (AMM 400 revoked)", async () => {
+    listProviders.mockResolvedValue({
+      data: [],
+      meta: { page: 1, limit: 20, total: 0, totalPages: 0, radiusKm: 10 },
+    });
+    const res = await listGet(jsonRequest("/api/providers?lat=19.43&lng=-99.13"));
+    expect(res.status).toBe(200);
+    expect(listProviders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        geo: { lat: 19.43, lng: -99.13, radiusKm: 10 },
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it("returns 400 for coords outside Mexico", async () => {
+    const res = await listGet(jsonRequest("/api/providers?lat=33.0&lng=-99.0"));
+    expect(res.status).toBe(400);
+    expect(listProviders).not.toHaveBeenCalled();
+    const body = await res.json();
+    expect(body.details?.some((d: { field: string; message: string }) =>
+      (d.field === "lat" || d.field === "lng") && d.message.includes("México")
+    )).toBe(true);
   });
 
   it("passes geo filter and returns distanceKm", async () => {
@@ -82,5 +124,136 @@ describe("geo providers routes", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.copyKey).toBe("eta_ready_approx");
+  });
+
+  describe("offersWholesale / offersDelivery query (F9)", () => {
+    const geo = "lat=25.6714&lng=-100.3089&radiusKm=10";
+
+    it("passes offersWholesale=true with geo", async () => {
+      listProviders.mockResolvedValue({
+        data: [{ id: "w1", offersWholesale: true, offersDelivery: false }],
+        meta: { page: 1, limit: 20, total: 1, totalPages: 1, radiusKm: 10 },
+      });
+      const res = await listGet(
+        jsonRequest(`/api/providers?${geo}&offersWholesale=true`)
+      );
+      expect(res.status).toBe(200);
+      expect(listProviders).toHaveBeenCalledWith(
+        expect.objectContaining({
+          offersWholesale: true,
+          geo: expect.objectContaining({ lat: 25.6714, lng: -100.3089, radiusKm: 10 }),
+        }),
+        expect.any(Object)
+      );
+      const body = await res.json();
+      expect(body.meta.total).toBe(1);
+    });
+
+    it("passes offersDelivery=true with geo", async () => {
+      listProviders.mockResolvedValue({
+        data: [{ id: "d1", offersWholesale: false, offersDelivery: true }],
+        meta: { page: 1, limit: 20, total: 1, totalPages: 1, radiusKm: 10 },
+      });
+      const res = await listGet(
+        jsonRequest(`/api/providers?${geo}&offersDelivery=true`)
+      );
+      expect(res.status).toBe(200);
+      expect(listProviders).toHaveBeenCalledWith(
+        expect.objectContaining({ offersDelivery: true }),
+        expect.any(Object)
+      );
+    });
+
+    it("ANDs both flags when both true", async () => {
+      listProviders.mockResolvedValue({
+        data: [],
+        meta: { page: 1, limit: 20, total: 0, totalPages: 0, radiusKm: 10 },
+      });
+      const res = await listGet(
+        jsonRequest(`/api/providers?${geo}&offersWholesale=true&offersDelivery=true`)
+      );
+      expect(res.status).toBe(200);
+      expect(listProviders).toHaveBeenCalledWith(
+        expect.objectContaining({
+          offersWholesale: true,
+          offersDelivery: true,
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it("ANDs flags with q and geo", async () => {
+      listProviders.mockResolvedValue({
+        data: [{ id: "p1", businessName: "Mango King" }],
+        meta: { page: 1, limit: 20, total: 1, totalPages: 1, radiusKm: 10 },
+      });
+      const res = await listGet(
+        jsonRequest(`/api/providers?${geo}&q=mango&offersWholesale=true`)
+      );
+      expect(res.status).toBe(200);
+      expect(listProviders).toHaveBeenCalledWith(
+        expect.objectContaining({
+          q: "mango",
+          offersWholesale: true,
+          geo: expect.objectContaining({ radiusKm: 10 }),
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it("returns 200 with total=0 when no matches", async () => {
+      listProviders.mockResolvedValue({
+        data: [],
+        meta: { page: 1, limit: 20, total: 0, totalPages: 0, radiusKm: 10 },
+      });
+      const res = await listGet(
+        jsonRequest(`/api/providers?${geo}&offersDelivery=true`)
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data).toEqual([]);
+      expect(body.meta.total).toBe(0);
+    });
+
+    it("returns 400 for invalid offersWholesale", async () => {
+      const res = await listGet(
+        jsonRequest(`/api/providers?${geo}&offersWholesale=maybe`)
+      );
+      expect(res.status).toBe(400);
+      expect(listProviders).not.toHaveBeenCalled();
+      const body = await res.json();
+      expect(body.details?.some((d: { field: string }) => d.field === "offersWholesale")).toBe(
+        true
+      );
+    });
+
+    it("treats false/0 as absent (no filter)", async () => {
+      listProviders.mockResolvedValue({
+        data: [],
+        meta: { page: 1, limit: 20, total: 0, totalPages: 0, radiusKm: 10 },
+      });
+      const res = await listGet(
+        jsonRequest(`/api/providers?${geo}&offersWholesale=false&offersDelivery=0`)
+      );
+      expect(res.status).toBe(200);
+      const filters = listProviders.mock.calls[0][0] as Record<string, unknown>;
+      expect(filters.offersWholesale).toBeUndefined();
+      expect(filters.offersDelivery).toBeUndefined();
+    });
+
+    it("accepts 1 as true", async () => {
+      listProviders.mockResolvedValue({
+        data: [],
+        meta: { page: 1, limit: 20, total: 0, totalPages: 0, radiusKm: 10 },
+      });
+      const res = await listGet(
+        jsonRequest(`/api/providers?${geo}&offersWholesale=1`)
+      );
+      expect(res.status).toBe(200);
+      expect(listProviders).toHaveBeenCalledWith(
+        expect.objectContaining({ offersWholesale: true }),
+        expect.any(Object)
+      );
+    });
   });
 });

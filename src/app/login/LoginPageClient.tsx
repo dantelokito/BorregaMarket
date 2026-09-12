@@ -3,13 +3,13 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { login } from "@/lib/api/auth";
+import { getAuthSession, login } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 import { isValidRedirect } from "@/lib/auth/redirect";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-
-const isDev = process.env.NODE_ENV !== "production";
+import { SessionPersistBanner } from "@/components/auth/SessionPersistBanner";
+import { DemoAccountsBlock } from "@/components/auth/DemoAccountsBlock";
 
 function LoginForm() {
   const router = useRouter();
@@ -19,15 +19,24 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [sessionLost, setSessionLost] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submitLogin() {
     setLoading(true);
     setError("");
+    setSessionLost(false);
 
     try {
       const user = await login(email, password);
+
+      // La cookie es el único portador de sesión (ADR-025): si no viaja de vuelta,
+      // navegar al destino dejaría al usuario fuera otra vez.
+      const session = await getAuthSession();
+      if (!session.authenticated) {
+        setSessionLost(true);
+        return;
+      }
 
       const roleRedirects: Record<string, string> = {
         ADMIN: "/admin",
@@ -51,6 +60,11 @@ function LoginForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    void submitLogin();
   }
 
   return (
@@ -93,6 +107,13 @@ function LoginForm() {
           </p>
         )}
 
+        {sessionLost && (
+          <SessionPersistBanner
+            onRetry={() => void submitLogin()}
+            cookiesBlocked={typeof navigator !== "undefined" && !navigator.cookieEnabled}
+          />
+        )}
+
         <Button
           type="submit"
           loading={loading}
@@ -103,52 +124,12 @@ function LoginForm() {
         </Button>
       </form>
 
-      {isDev && (
-        <div className="mt-6 border-t border-gray-200 pt-6 text-sm text-gray-500">
-          <p className="mb-2 font-medium">Cuentas demo (password: Demo1234!):</p>
-          <ul className="space-y-1 text-xs">
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("admin@laborregamarket.mx");
-                  setPassword("Demo1234!");
-                }}
-                className="text-[var(--brand)] hover:underline"
-              >
-                admin@laborregamarket.mx
-              </button>{" "}
-              → Admin
-            </li>
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("frutas@elparaiso.mx");
-                  setPassword("Demo1234!");
-                }}
-                className="text-[var(--brand)] hover:underline"
-              >
-                frutas@elparaiso.mx
-              </button>{" "}
-              → Proveedor
-            </li>
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("cliente@demo.mx");
-                  setPassword("Demo1234!");
-                }}
-                className="text-[var(--brand)] hover:underline"
-              >
-                cliente@demo.mx
-              </button>{" "}
-              → Cliente
-            </li>
-          </ul>
-        </div>
-      )}
+      <DemoAccountsBlock
+        onPick={(email, password) => {
+          setEmail(email);
+          setPassword(password);
+        }}
+      />
 
       <p className="mt-4 text-center text-sm text-gray-500">
         ¿No tienes cuenta?{" "}

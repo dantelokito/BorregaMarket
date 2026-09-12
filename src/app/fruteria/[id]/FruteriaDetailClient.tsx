@@ -8,7 +8,7 @@ import { getProviderById } from "@/lib/api/providers";
 import { ApiError } from "@/lib/api/client";
 import type { ProviderDetail, ProviderProduct } from "@/lib/api/types";
 import { ProviderHero } from "@/components/fruteria/ProviderHero";
-import { ProductTable } from "@/components/fruteria/ProductTable";
+import { SectionedProductList } from "@/components/fruteria/SectionedProductList";
 import { MiniMap } from "@/components/fruteria/MiniMap";
 import { ContactCTA } from "@/components/fruteria/ContactCTA";
 import { ReviewList } from "@/components/reviews/ReviewList";
@@ -204,7 +204,7 @@ export function FruteriaDetailClient() {
       </div>
 
       <section>
-        <ProductTable
+        <SectionedProductList
           products={provider.products}
           phone={provider.phone}
           providerId={provider.id}

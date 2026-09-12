@@ -25,6 +25,7 @@ export function ProviderHero({ provider }: ProviderHeroProps) {
             className="object-cover"
             sizes="(max-width: 1024px) 100vw, 1024px"
             priority
+            unoptimized={provider.coverUrl.startsWith("/api/media")}
             onError={() => setCoverError(true)}
           />
         ) : (
@@ -40,6 +41,7 @@ export function ProviderHero({ provider }: ProviderHeroProps) {
                 fill
                 className="object-cover"
                 sizes="80px"
+                unoptimized={provider.logoUrl.startsWith("/api/media")}
                 onError={() => setLogoError(true)}
               />
             </div>

@@ -25,3 +25,7 @@ export async function updateAddress(id: string, input: Partial<CreateAddressInpu
 export async function deleteAddress(id: string) {
   return apiDelete<{ id: string; deleted: true }>(`/api/users/me/addresses/${id}`);
 }
+
+export async function markAddressUsed(id: string) {
+  return apiPost<UserAddress>(`/api/users/me/addresses/${id}/use`, {});
+}

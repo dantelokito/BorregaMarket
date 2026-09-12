@@ -19,6 +19,7 @@ if (process.env.NODE_ENV === "production") {
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["localhost"],
+  serverExternalPackages: ["pdfkit"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },

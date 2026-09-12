@@ -2,8 +2,8 @@
 
 import { Phone, MessageCircle } from "lucide-react";
 import { notifyProviderContact } from "@/lib/api/providers";
-import { ApiError } from "@/lib/api/client";
 import { telHref, whatsappHref } from "@/lib/phone";
+import { CONTACT_TOAST_SUCCESS, notifyContactToast } from "@/lib/ui/contact-toast";
 import { useToast } from "@/components/ui/Toast";
 
 export type ContactSource = "call_button" | "whatsapp_button" | "other";
@@ -35,16 +35,12 @@ export function ContactCTA({
     void notifyProviderContact(providerId, { source })
       .then(({ data }) => {
         if (data.notified) {
-          showToast("La frutería fue notificada", "success");
+          showToast(CONTACT_TOAST_SUCCESS, "success");
         }
       })
       .catch((err) => {
-        if (err instanceof ApiError && err.status === 429) {
-          return;
-        }
-        if (err instanceof ApiError || err instanceof TypeError) {
-          showToast("No pudimos notificar a la frutería", "error");
-        }
+        const toast = notifyContactToast(err);
+        if (toast) showToast(toast.message, toast.variant);
       });
   }
 

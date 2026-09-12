@@ -16,6 +16,10 @@ vi.mock("@/lib/auth/session", async () => {
   };
 });
 
+vi.mock("@/lib/auth/permissions", () => ({
+  hasModulePermission: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("@/lib/services/provider.service", async () => {
   const actual = await vi.importActual<typeof import("@/lib/services/provider.service")>(
     "@/lib/services/provider.service"
@@ -85,5 +89,38 @@ describe("PATCH /api/admin/providers/[id]", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.details[0].message).toBe(PRIMARY_CONTRAST_MESSAGE);
+  });
+
+  it("accepts F10 flags", async () => {
+    updateAdminProvider.mockResolvedValue({
+      id: "p1",
+      businessName: "El Paraíso",
+      isVerified: false,
+      isActive: false,
+      offersWholesale: true,
+      offersDelivery: false,
+      googleReviewsEnabled: false,
+      verifiedAt: null,
+    });
+    const res = await PATCH(
+      jsonRequest("/api/admin/providers/p1", {
+        isVerified: false,
+        isActive: false,
+        offersWholesale: true,
+        offersDelivery: false,
+      }),
+      params
+    );
+    expect(res.status).toBe(200);
+    expect(updateAdminProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          isVerified: false,
+          isActive: false,
+          offersWholesale: true,
+          offersDelivery: false,
+        }),
+      })
+    );
   });
 });

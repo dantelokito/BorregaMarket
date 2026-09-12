@@ -9,6 +9,72 @@ import {
   isSecondaryContrastValid,
 } from "@/lib/color/contrast";
 
+const hhMm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Usa HH:mm (24h)");
+
+function hhMmToMinutes(value: string): number {
+  const [h, m] = value.split(":").map(Number);
+  return h * 60 + m;
+}
+
+export const openingHourDaySchema = z
+  .object({
+    day: z.number().int().min(0).max(6),
+    open: z.string().nullable(),
+    close: z.string().nullable(),
+    closed: z.boolean(),
+  })
+  .superRefine((slot, ctx) => {
+    if (slot.closed) {
+      if (slot.open !== null || slot.close !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["open"],
+          message: "Día cerrado debe tener open y close en null",
+        });
+      }
+      return;
+    }
+    const openOk = hhMm.safeParse(slot.open);
+    const closeOk = hhMm.safeParse(slot.close);
+    if (!openOk.success || !closeOk.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["open"],
+        message: "Día abierto requiere open y close en HH:mm",
+      });
+      return;
+    }
+    if (hhMmToMinutes(openOk.data) >= hhMmToMinutes(closeOk.data)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["close"],
+        message: "open debe ser menor que close (mismo día)",
+      });
+    }
+  });
+
+export const openingHoursSchema = z
+  .union([
+    z.null(),
+    z
+      .array(openingHourDaySchema)
+      .max(7, "Máximo 7 días")
+      .superRefine((days, ctx) => {
+        const seen = new Set<number>();
+        for (const [i, slot] of days.entries()) {
+          if (seen.has(slot.day)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [i, "day"],
+              message: "day debe ser único (0–6)",
+            });
+          }
+          seen.add(slot.day);
+        }
+      }),
+  ])
+  .optional();
+
 const hexOrNull = z.union([
   z.string().regex(/^#[0-9A-Fa-f]{6}$/, HEX_FORMAT_MESSAGE),
   z.null(),
@@ -33,14 +99,18 @@ export function brandPairSuperRefine(
 
   if (data.primaryColor === null) return;
 
-  if (!isPrimaryContrastValid(data.primaryColor)) {
+  const primaryColor = data.primaryColor;
+  const secondaryColor = data.secondaryColor;
+  if (!primaryColor || !secondaryColor) return;
+
+  if (!isPrimaryContrastValid(primaryColor)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["primaryColor"],
       message: PRIMARY_CONTRAST_MESSAGE,
     });
   }
-  if (!isSecondaryContrastValid(data.secondaryColor as string)) {
+  if (!isSecondaryContrastValid(secondaryColor)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["secondaryColor"],
@@ -77,6 +147,11 @@ export const patchProviderSettingsSchema = z
     googleReviewsEnabled: z.boolean().optional(),
     primaryColor: hexOrNull.optional(),
     secondaryColor: hexOrNull.optional(),
+    whatsappEnabled: z.boolean().optional(),
+    acceptsCardAtStore: z.boolean().optional(),
+    offersWholesale: z.boolean().optional(),
+    offersRetail: z.boolean().optional(),
+    openingHours: openingHoursSchema,
   })
   .strict()
   .superRefine(brandPairSuperRefine);
@@ -86,6 +161,9 @@ export type PatchProviderSettingsInput = z.infer<typeof patchProviderSettingsSch
 export const patchAdminProviderSchema = z
   .object({
     isVerified: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+    offersWholesale: z.boolean().optional(),
+    offersDelivery: z.boolean().optional(),
     primaryColor: hexOrNull.optional(),
     secondaryColor: hexOrNull.optional(),
   })
@@ -94,9 +172,12 @@ export const patchAdminProviderSchema = z
   .refine(
     (data) =>
       data.isVerified !== undefined ||
+      data.isActive !== undefined ||
+      data.offersWholesale !== undefined ||
+      data.offersDelivery !== undefined ||
       data.primaryColor !== undefined ||
       data.secondaryColor !== undefined,
-    { message: "Indica isVerified o un par de colores" }
+    { message: "Indica isVerified, isActive, flags o un par de colores" }
   );
 
 export type PatchAdminProviderInput = z.infer<typeof patchAdminProviderSchema>;

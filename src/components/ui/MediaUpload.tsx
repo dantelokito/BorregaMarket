@@ -19,7 +19,7 @@ interface MediaUploadProps {
   onUpload: (file: File) => Promise<string>;
 }
 
-/** Bust Next.js / browser cache when Cloudinary overwrites same public_id */
+/** Bust Next.js / browser cache when the same path is overwritten on disk */
 function withCacheBust(url: string, version: number): string {
   if (version <= 0) return url;
   const sep = url.includes("?") ? "&" : "?";
@@ -66,7 +66,7 @@ export function MediaUpload({
 
   function validate(file: File): string | null {
     if (!ACCEPTED.includes(file.type)) {
-      return "Formato no permitido. Usa JPEG, PNG o WebP";
+      return "Formato no permitido. Use JPEG, PNG o WebP";
     }
     if (file.size > MAX_BYTES) {
       return "El archivo supera el límite de 5MB";
@@ -137,7 +137,7 @@ export function MediaUpload({
               src={displaySrc}
               alt={label}
               fill
-              unoptimized={isBlob}
+              unoptimized={isBlob || Boolean(displayUrl?.startsWith("/api/media"))}
               className="object-cover"
               sizes="576px"
               onError={() => setImgError(true)}
@@ -149,7 +149,7 @@ export function MediaUpload({
               alt={label}
               width={variant === "logo" ? 112 : 80}
               height={variant === "logo" ? 112 : 80}
-              unoptimized={isBlob}
+              unoptimized={isBlob || Boolean(displayUrl?.startsWith("/api/media"))}
               className={`h-full w-full object-cover ${variant === "logo" ? "rounded-full" : "rounded-lg"}`}
               onError={() => setImgError(true)}
             />

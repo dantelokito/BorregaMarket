@@ -1,4 +1,5 @@
-import { MONTERREY_VIEWBOX } from "./constants";
+import { isInMexico } from "@/lib/geo/bounds";
+import { MEXICO_VIEWBOX } from "./constants";
 
 export interface GeocodeResult {
   lat: number;
@@ -12,7 +13,7 @@ export function buildNominatimSearchUrl(query: string): string {
   url.searchParams.set("format", "jsonv2");
   url.searchParams.set("limit", "1");
   url.searchParams.set("countrycodes", "mx");
-  url.searchParams.set("viewbox", MONTERREY_VIEWBOX);
+  url.searchParams.set("viewbox", MEXICO_VIEWBOX);
   url.searchParams.set("bounded", "1");
   return url.toString();
 }
@@ -33,6 +34,9 @@ export async function geocodeAddress(query: string): Promise<GeocodeResult> {
   const lng = Number(first.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     throw new Error("not found");
+  }
+  if (!isInMexico(lat, lng)) {
+    throw new Error("out-of-mexico");
   }
   return { lat, lng, formattedAddress: first.display_name };
 }

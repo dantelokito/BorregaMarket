@@ -17,6 +17,7 @@ interface ProductTableProps {
   providerId?: string;
   quantities?: Record<string, number>;
   onQuantityChange?: (product: ProviderProduct, quantity: number) => void;
+  embedded?: boolean;
 }
 
 const categoryLabels: Record<string, string> = {
@@ -30,7 +31,7 @@ function ProductThumb({ product }: { product: ProviderProduct }) {
   const src = product.imageUrl;
 
   if (!src || error) {
-    return <ImagePlaceholder variant="product" category={product.category} />;
+    return <ImagePlaceholder variant="product" category={product.category ?? undefined} />;
   }
 
   return (
@@ -42,6 +43,7 @@ function ProductThumb({ product }: { product: ProviderProduct }) {
         className="object-cover"
         sizes="48px"
         loading="lazy"
+        unoptimized={src.startsWith("/api/media")}
         onError={() => setError(true)}
       />
     </div>
@@ -58,10 +60,12 @@ export function ProductTable({
   providerId,
   quantities = {},
   onQuantityChange,
+  embedded = false,
 }: ProductTableProps) {
   const visible = products.filter((p) => p.isAvailable);
 
   if (visible.length === 0) {
+    if (embedded) return null;
     return (
       <EmptyState
         title="Sin productos publicados aún"
@@ -78,10 +82,12 @@ export function ProductTable({
 
   return (
     <div>
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 className="text-xl font-semibold">Productos disponibles</h2>
-        <PickupNotice />
-      </div>
+      {!embedded && (
+        <div className="mb-3 flex items-baseline justify-between gap-2">
+          <h2 className="text-xl font-semibold">Productos disponibles</h2>
+          <PickupNotice />
+        </div>
+      )}
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <table className="hidden w-full text-sm sm:table">
           <thead className="border-b border-gray-200 bg-gray-50">
@@ -151,7 +157,9 @@ function ProductRow({
           <div className="min-w-0 flex-1">
             <p className="font-medium">{product.name}</p>
             <p className="text-xs text-gray-500">
-              {categoryLabels[product.category] ?? product.category}
+              {product.category
+                ? (categoryLabels[product.category] ?? product.category)
+                : (product.sectionName ?? "")}
             </p>
             <p className="mt-1 font-semibold tabular-nums">
               {formatCurrency(product.price)} / {unitLabel(product)}
@@ -171,7 +179,9 @@ function ProductRow({
           <div>
             <span className="font-medium">{product.name}</span>
             <p className="text-xs text-gray-500">
-              {categoryLabels[product.category] ?? product.category}
+              {product.category
+                ? (categoryLabels[product.category] ?? product.category)
+                : (product.sectionName ?? "")}
             </p>
           </div>
         </div>

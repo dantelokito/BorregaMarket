@@ -17,6 +17,12 @@ import {
   type PatchProviderSettingsInput,
 } from "@/lib/validators/provider-settings";
 import { canonicalizeHex } from "@/lib/color/contrast";
+import { formatAuthorName } from "@/lib/validators/review";
+import {
+  computeIsOpenNow,
+  isHoursPublished,
+  normalizeOpeningHours,
+} from "@/lib/providers/opening-hours";
 
 export class ProviderConflictError extends Error {
   constructor(message = "Ya tienes un negocio registrado") {
@@ -54,6 +60,8 @@ interface ListProvidersFilters {
   q?: string | null;
   verified?: boolean;
   category?: "FRUTA" | "VERDURA" | "AGRICOLA" | null;
+  offersWholesale?: boolean;
+  offersDelivery?: boolean;
   geo?: { lat: number; lng: number; radiusKm: number } | null;
 }
 
@@ -78,6 +86,8 @@ function mapProviderCard(
     rating: number;
     reviewCount: number;
     isVerified: boolean;
+    offersWholesale: boolean;
+    offersDelivery: boolean;
     providerProducts: Array<{
       price: Prisma.Decimal;
       product: { name: string; unit: string; imageUrl: string | null };
@@ -101,6 +111,8 @@ function mapProviderCard(
     rating: p.rating,
     reviewCount: p.reviewCount,
     isVerified: p.isVerified,
+    offersWholesale: p.offersWholesale,
+    offersDelivery: p.offersDelivery,
     productCount: p._count.providerProducts,
     minPrice: prices.length ? Math.min(...prices) : null,
     sampleProducts: p.providerProducts.map((pp) => ({
@@ -113,7 +125,7 @@ function mapProviderCard(
   };
 }
 
-function buildWhere(filters: ListProvidersFilters): Prisma.ProviderWhereInput {
+export function buildWhere(filters: ListProvidersFilters): Prisma.ProviderWhereInput {
   const and: Prisma.ProviderWhereInput[] = [];
 
   if (filters.category) {
@@ -123,6 +135,7 @@ function buildWhere(filters: ListProvidersFilters): Prisma.ProviderWhereInput {
           isAvailable: true,
           product: {
             isActive: true,
+            scope: "GLOBAL",
             category: filters.category,
           },
         },
@@ -141,7 +154,10 @@ function buildWhere(filters: ListProvidersFilters): Prisma.ProviderWhereInput {
               isAvailable: true,
               product: {
                 isActive: true,
-                name: { contains: filters.q, mode: "insensitive" as const },
+                OR: [
+                  { name: { contains: filters.q, mode: "insensitive" as const } },
+                  { slug: { contains: filters.q, mode: "insensitive" as const } },
+                ],
               },
             },
           },
@@ -156,6 +172,8 @@ function buildWhere(filters: ListProvidersFilters): Prisma.ProviderWhereInput {
       ? { city: { contains: filters.city, mode: "insensitive" as const } }
       : {}),
     ...(filters.verified ? { isVerified: true } : {}),
+    ...(filters.offersWholesale === true ? { offersWholesale: true } : {}),
+    ...(filters.offersDelivery === true ? { offersDelivery: true } : {}),
     ...(and.length > 0 ? { AND: and } : {}),
   };
 }
@@ -284,8 +302,12 @@ export async function getProviderDetail(id: string) {
     include: {
       providerProducts: {
         where: sellableProviderProductWhere,
-        include: { product: true },
-        orderBy: [{ product: { category: "asc" } }, { product: { name: "asc" } }],
+        include: { product: true, section: true },
+      },
+      reviews: {
+        include: { client: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 3,
       },
     },
   });
@@ -293,6 +315,9 @@ export async function getProviderDetail(id: string) {
   if (!provider) {
     throw new ProviderNotFoundError();
   }
+
+  const openingHours = normalizeOpeningHours(provider.openingHours);
+  const hoursPublished = isHoursPublished(openingHours);
 
   return {
     id: provider.id,
@@ -309,10 +334,32 @@ export async function getProviderDetail(id: string) {
     rating: provider.rating,
     reviewCount: provider.reviewCount,
     isVerified: provider.isVerified,
+    verifiedAt: provider.verifiedAt?.toISOString() ?? null,
     preparationTimeMinutes: provider.preparationTimeMinutes,
     offersDelivery: provider.offersDelivery,
+    whatsappEnabled: provider.whatsappEnabled,
+    acceptsCardAtStore: provider.acceptsCardAtStore,
+    offersWholesale: provider.offersWholesale,
+    offersRetail: provider.offersRetail,
+    hoursPublished,
+    isOpenNow: computeIsOpenNow(openingHours),
+    openingHours,
     googleReviews: googleReviewsGate(provider),
-    products: provider.providerProducts.map((pp) => ({
+    reviewsPreview: (provider.reviews ?? []).map((review) => ({
+      id: review.id,
+      rating: review.rating,
+      comment: review.comment,
+      authorName: formatAuthorName(review.client.name),
+      createdAt: review.createdAt.toISOString(),
+    })),
+    products: [...provider.providerProducts]
+      .sort((a, b) => {
+        const ao = a.section?.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        const bo = b.section?.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        if (ao !== bo) return ao - bo;
+        return a.product.name.localeCompare(b.product.name, "es");
+      })
+      .map((pp) => ({
       providerProductId: pp.id,
       productId: pp.product.id,
       name: pp.product.name,
@@ -322,7 +369,11 @@ export async function getProviderDetail(id: string) {
       unitOfMeasure: toUnitOfMeasure(pp.product.unit),
       price: Number(pp.price),
       isAvailable: pp.isAvailable,
-      imageUrl: pp.product.imageUrl,
+      imageUrl: pp.imageUrl ?? pp.product.imageUrl,
+      scope: pp.product.scope,
+      sectionId: pp.sectionId,
+      sectionName: pp.section?.name ?? null,
+      sectionSortOrder: pp.section?.sortOrder ?? null,
     })),
   };
 }
@@ -357,6 +408,8 @@ export async function listAdminProviders(
         phone: p.phone,
         isVerified: p.isVerified,
         isActive: p.isActive,
+        offersWholesale: p.offersWholesale,
+        offersDelivery: p.offersDelivery,
         userEmail,
         /** US-NOTIFY-04: badge admin cuando el negocio no puede recibir email */
         hasValidEmail,
@@ -394,15 +447,33 @@ export async function updateAdminProvider(params: {
   const updated = await prisma.provider.update({
     where: { id: params.id },
     data: {
-      ...(params.input.isVerified !== undefined ? { isVerified: params.input.isVerified } : {}),
-      ...(params.input.isVerified === false ? { googleReviewsEnabled: false } : {}),
+      ...(params.input.isVerified === true
+        ? {
+            isVerified: true,
+            verifiedAt: provider.verifiedAt ?? new Date(),
+          }
+        : {}),
+      ...(params.input.isVerified === false
+        ? { isVerified: false, verifiedAt: null, googleReviewsEnabled: false }
+        : {}),
+      ...(params.input.isActive !== undefined ? { isActive: params.input.isActive } : {}),
+      ...(params.input.offersWholesale !== undefined
+        ? { offersWholesale: params.input.offersWholesale }
+        : {}),
+      ...(params.input.offersDelivery !== undefined
+        ? { offersDelivery: params.input.offersDelivery }
+        : {}),
       ...brandData,
     },
     select: {
       id: true,
       businessName: true,
       isVerified: true,
+      isActive: true,
+      offersWholesale: true,
+      offersDelivery: true,
       googleReviewsEnabled: true,
+      verifiedAt: true,
       primaryColor: true,
       secondaryColor: true,
     },
@@ -416,6 +487,13 @@ export async function updateAdminProvider(params: {
     ipAddress: params.ipAddress,
     details: {
       ...(params.input.isVerified !== undefined ? { isVerified: params.input.isVerified } : {}),
+      ...(params.input.isActive !== undefined ? { isActive: params.input.isActive } : {}),
+      ...(params.input.offersWholesale !== undefined
+        ? { offersWholesale: params.input.offersWholesale }
+        : {}),
+      ...(params.input.offersDelivery !== undefined
+        ? { offersDelivery: params.input.offersDelivery }
+        : {}),
       googleReviewsEnabled: updated.googleReviewsEnabled,
       ...(bodyTouchesBrand(params.input)
         ? {
@@ -426,7 +504,16 @@ export async function updateAdminProvider(params: {
     },
   });
 
-  return updated;
+  return {
+    id: updated.id,
+    businessName: updated.businessName,
+    isVerified: updated.isVerified,
+    isActive: updated.isActive,
+    offersWholesale: updated.offersWholesale,
+    offersDelivery: updated.offersDelivery,
+    googleReviewsEnabled: updated.googleReviewsEnabled,
+    verifiedAt: updated.verifiedAt?.toISOString() ?? null,
+  };
 }
 
 export async function updateProviderVerification(
@@ -453,6 +540,7 @@ function serializeProviderSettings(provider: {
   phone: string;
   description: string | null;
   isVerified: boolean;
+  verifiedAt?: Date | null;
   isActive: boolean;
   logoUrl: string | null;
   coverUrl: string | null;
@@ -463,7 +551,13 @@ function serializeProviderSettings(provider: {
   googleReviewsEnabled: boolean;
   primaryColor?: string | null;
   secondaryColor?: string | null;
+  whatsappEnabled?: boolean;
+  acceptsCardAtStore?: boolean;
+  offersWholesale?: boolean;
+  offersRetail?: boolean;
+  openingHours?: Prisma.JsonValue | null;
 }) {
+  const openingHours = normalizeOpeningHours(provider.openingHours);
   return {
     id: provider.id,
     businessName: provider.businessName,
@@ -474,11 +568,17 @@ function serializeProviderSettings(provider: {
     phone: provider.phone,
     description: provider.description,
     isVerified: provider.isVerified,
+    verifiedAt: provider.verifiedAt?.toISOString() ?? null,
     isActive: provider.isActive,
     logoUrl: provider.logoUrl,
     coverUrl: provider.coverUrl,
     preparationTimeMinutes: provider.preparationTimeMinutes,
     offersDelivery: provider.offersDelivery,
+    whatsappEnabled: provider.whatsappEnabled ?? false,
+    acceptsCardAtStore: provider.acceptsCardAtStore ?? false,
+    offersWholesale: provider.offersWholesale ?? false,
+    offersRetail: provider.offersRetail ?? true,
+    openingHours,
     googlePlaceId: provider.googlePlaceId,
     googleMapsUrl: provider.googleMapsUrl,
     googleReviewsEnabled: provider.googleReviewsEnabled,
@@ -558,6 +658,26 @@ export async function updateProviderSettings(params: {
         : {}),
       ...(params.input.googleReviewsEnabled !== undefined
         ? { googleReviewsEnabled: params.input.googleReviewsEnabled }
+        : {}),
+      ...(params.input.whatsappEnabled !== undefined
+        ? { whatsappEnabled: params.input.whatsappEnabled }
+        : {}),
+      ...(params.input.acceptsCardAtStore !== undefined
+        ? { acceptsCardAtStore: params.input.acceptsCardAtStore }
+        : {}),
+      ...(params.input.offersWholesale !== undefined
+        ? { offersWholesale: params.input.offersWholesale }
+        : {}),
+      ...(params.input.offersRetail !== undefined
+        ? { offersRetail: params.input.offersRetail }
+        : {}),
+      ...(params.input.openingHours !== undefined
+        ? {
+            openingHours:
+              params.input.openingHours === null
+                ? Prisma.DbNull
+                : params.input.openingHours,
+          }
         : {}),
       ...brandData,
     },

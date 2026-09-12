@@ -18,6 +18,10 @@ vi.mock("@/lib/auth/session", async () => {
   };
 });
 
+vi.mock("@/lib/auth/permissions", () => ({
+  hasModulePermission: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("@/lib/services/review.service", async () => {
   const actual = await vi.importActual<typeof import("@/lib/services/review.service")>(
     "@/lib/services/review.service"

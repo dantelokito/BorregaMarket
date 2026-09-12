@@ -46,6 +46,8 @@ export interface ProviderListing {
   rating: number;
   reviewCount: number;
   isVerified: boolean;
+  offersWholesale: boolean;
+  offersDelivery: boolean;
   productCount: number;
   sampleProducts: { name: string; price: number; unit: string }[];
   minPrice: number | null;
@@ -53,6 +55,7 @@ export interface ProviderListing {
 }
 
 export type UnitOfMeasure = "PZA" | "KG" | "GR";
+export type ProductScope = "GLOBAL" | "LOCAL";
 export type OrderStatus = "PENDING" | "CONFIRMED" | "IN_TRANSIT" | "DELIVERED" | "CANCELLED";
 export type OrderSource = "MARKETPLACE" | "POS";
 export type PaymentMethod = "CASH" | "OTHER" | "UNPAID";
@@ -62,12 +65,23 @@ export interface ProviderProduct {
   productId: string;
   name: string;
   slug: string;
-  category: string;
+  category: string | null;
   unit: string;
   unitOfMeasure: UnitOfMeasure;
   price: number;
   isAvailable: boolean;
   imageUrl?: string | null;
+  scope?: ProductScope;
+  sectionId?: string | null;
+  sectionName?: string | null;
+  sectionSortOrder?: number | null;
+}
+
+export interface OpeningHourDay {
+  day: number;
+  open: string | null;
+  close: string | null;
+  closed: boolean;
 }
 
 export interface ProviderDetail {
@@ -85,8 +99,17 @@ export interface ProviderDetail {
   rating: number;
   reviewCount: number;
   isVerified: boolean;
+  verifiedAt?: string | null;
   preparationTimeMinutes?: number;
   offersDelivery?: boolean;
+  whatsappEnabled?: boolean;
+  acceptsCardAtStore?: boolean;
+  offersWholesale?: boolean;
+  offersRetail?: boolean;
+  hoursPublished?: boolean;
+  isOpenNow?: boolean | null;
+  openingHours?: OpeningHourDay[] | null;
+  reviewsPreview?: ProviderReview[];
   googleReviews?: {
     enabled: boolean;
     placeId: string | null;
@@ -131,7 +154,7 @@ export interface CatalogItem {
     id: string;
     name: string;
     slug: string;
-    category: string;
+    category: string | null;
     unit: string;
     description: string | null;
     imageUrl?: string | null;
@@ -139,6 +162,43 @@ export interface CatalogItem {
   price: number | null;
   isAvailable: boolean;
   providerProductId: string | null;
+  scope?: ProductScope;
+  sectionId?: string | null;
+  sectionName?: string | null;
+  imageUrl?: string | null;
+}
+
+export interface ProviderSection {
+  id: string;
+  name: string;
+  sortOrder: number;
+  productCount: number;
+}
+
+export interface LocalProductRecord {
+  providerProductId: string;
+  productId: string;
+  scope: "LOCAL";
+  name: string;
+  slug: string;
+  unit: string;
+  price: number;
+  isAvailable: boolean;
+  sectionId: string | null;
+  imageUrl: string | null;
+}
+
+export interface AdminProduct {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  category: string | null;
+  unit: string;
+  imageUrl: string | null;
+  isActive: boolean;
+  scope: ProductScope;
+  createdAt: string;
 }
 
 export interface ProviderProductsResponse {
@@ -153,6 +213,8 @@ export interface AdminProvider {
   phone: string | null;
   isVerified: boolean;
   isActive: boolean;
+  offersWholesale?: boolean;
+  offersDelivery?: boolean;
   userEmail: string;
   hasValidEmail?: boolean;
   createdAt: string;
@@ -225,6 +287,7 @@ export interface UserAddress {
   lng: number;
   isFavorite: boolean;
   isDefault: boolean;
+  lastUsedAt: string | null;
   createdAt: string;
 }
 
@@ -315,6 +378,58 @@ export interface DashboardSummary {
     quantitySum: string;
   }[];
   empty: boolean;
+}
+
+export type ReportGrain = "day" | "month" | "year";
+
+export interface ProviderReportSourceKpi {
+  gmv: string;
+  orderCount: number;
+}
+
+export interface ProviderReport {
+  empty: boolean;
+  timezone: "America/Monterrey";
+  generatedAt: string;
+  provider: {
+    id: string;
+    businessName: string;
+  };
+  period: {
+    mode?: "grain" | "range";
+    grain?: ReportGrain;
+    date?: string;
+    from: string;
+    to: string;
+    fromUtc?: string;
+    toUtc?: string;
+  };
+  kpis: {
+    gmv: string;
+    avgTicket: string;
+    orderCount: number;
+    bySource: {
+      MARKETPLACE: ProviderReportSourceKpi;
+      POS: ProviderReportSourceKpi;
+    };
+  };
+  series: { bucket: string; gmv: string; orderCount: number }[];
+  topProducts?: {
+    providerProductId: string | null;
+    name: string;
+    salesTotal: string;
+    quantitySum: string;
+  }[];
+  products?: {
+    providerProductId: string | null;
+    name: string;
+    quantitySum: string;
+    salesTotal: string;
+    bySource: {
+      MARKETPLACE: { gmv: string; quantitySum: string };
+      POS: { gmv: string; quantitySum: string };
+    };
+  }[];
 }
 
 export interface CreateProviderInput {

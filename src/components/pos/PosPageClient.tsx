@@ -304,7 +304,7 @@ export function PosPageClient() {
               <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-200" />
             ))}
           </div>
-        ) : !query && available.length === 0 ? (
+        ) : !error && !query && available.length === 0 ? (
           <EmptyState
             title="No hay productos activos"
             description="Activa al menos uno en Catálogo para vender."
@@ -317,7 +317,7 @@ export function PosPageClient() {
               </Link>
             }
           />
-        ) : filtered.length === 0 ? (
+        ) : !error && filtered.length === 0 ? (
           <EmptyState
             title="Sin resultados"
             description="Agrega una línea libre al ticket."

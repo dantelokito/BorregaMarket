@@ -18,15 +18,20 @@
 # production
 /build
 
+# local image uploads (ADR-032)
+/uploads
+
 # misc
 .DS_Store
 *.pem
+.npmrc
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
 
 # env files — nunca subir secretos (API keys, JWT, DB)
 .env

@@ -5,6 +5,11 @@
   --brand-dark: #c13515;
   --brand-light: #ff5a5f;
   --brand-secondary: #c13515;
+  --explore-map-min-h-mobile: 420px;
+  --explore-sticky-top: 152px;
+  --explore-filter-tab-h: 32px;
+  --explore-filterbar-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --explore-addressbar-controls-h: 2.75rem;
 }
 
 body {
@@ -26,47 +31,277 @@ body {
   font-family: inherit;
 }
 
-.lbm-price-icon,
+/* Explore F7: main scroll under header; map scroll anchoring off (BUG-011) */
+.explore-main-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+.explore-map-section {
+  overflow-anchor: none;
+}
+
+/* Explore F7 BUG-013: FilterBar colapsable — layout grid animado + pill flotante */
+.explore-filterbar-layout {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.3s var(--explore-filterbar-ease);
+}
+
+.explore-filterbar-layout--collapsed {
+  grid-template-rows: 0fr;
+  overflow: visible;
+}
+
+.explore-filterbar-layout--collapsing,
+.explore-filterbar-layout--expanding {
+  will-change: grid-template-rows;
+}
+
+.explore-filterbar-layout-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.explore-filterbar-layout--collapsed .explore-filterbar-layout-inner {
+  overflow: visible;
+}
+
+.explore-filterbar-chrome {
+  position: relative;
+  background: transparent;
+}
+
+.explore-filterbar-shell {
+  overflow: hidden;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.explore-filterbar-shell--collapsing,
+.explore-filterbar-shell--expanding {
+  will-change: grid-template-rows;
+}
+
+.explore-filterbar-shell--collapsed {
+  grid-template-rows: 0fr;
+}
+
+.explore-filterbar-shell--collapsed .explore-filterbar-panel,
+.explore-filterbar-shell--collapsing .explore-filterbar-panel {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-100%);
+}
+
+.explore-filterbar-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.explore-filterbar-panel {
+  transform: translateY(0);
+  transition:
+    opacity 0.3s var(--explore-filterbar-ease),
+    transform 0.3s var(--explore-filterbar-ease),
+    visibility 0s linear 0.3s;
+}
+
+.explore-filterbar-shell--expanding .explore-filterbar-panel {
+  transition:
+    opacity 0.3s var(--explore-filterbar-ease),
+    transform 0.3s var(--explore-filterbar-ease),
+    visibility 0s;
+}
+
+/* Siempre fuera del flujo — evita hueco bajo el panel cuando está expandido */
+.explore-filter-tab-row {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.explore-filter-tab-row--visible {
+  height: auto;
+  overflow: visible;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.explore-filter-tab {
+  pointer-events: auto;
+  min-height: max(44px, var(--explore-filter-tab-h));
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.12);
+  transform: translateY(-6px) scale(0.96);
+  opacity: 0;
+  transition:
+    transform 0.3s var(--explore-filterbar-ease) 0.12s,
+    opacity 0.3s var(--explore-filterbar-ease) 0.12s,
+    box-shadow 0.2s ease;
+}
+
+.explore-filter-tab-row--visible .explore-filter-tab {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.explore-filter-tab:hover {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.16);
+}
+
+.lbm-store-icon,
 .lbm-user-pin,
 .lbm-mini-pin {
   background: transparent;
   border: none;
 }
 
-/* Price bubble on map */
-.price-bubble {
+/* Business marker: icon only, name lives in the tooltip (US-GEO-15) */
+.store-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
   background: white;
-  border: 1px solid #ddd;
-  border-radius: 20px;
-  padding: 4px 10px;
-  font-size: 13px;
-  font-weight: 600;
+  border: 1px solid #cbd5e1;
+  color: #1e293b;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: transform 0.15s ease;
 }
-.price-bubble:hover,
-.price-bubble.active {
-  background: #222;
+.store-pin:hover,
+.store-pin.active,
+.leaflet-marker-icon:focus .store-pin {
+  background: var(--brand);
+  border-color: var(--brand);
   color: white;
-  border-color: #222;
-  transform: scale(1.05);
+  transform: scale(1.08);
+}
+
+.lbm-marker-tooltip {
+  font-size: 0.875rem;
+  color: #0f172a;
+  background: white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+/* Explore F9: preview in-card overlay clipped by shell */
+.provider-card-shell {
+  contain: layout;
+  transition: box-shadow 0.2s ease;
+}
+
+.provider-card-shell--hovered {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.provider-preview-overlay {
+  transform: translateY(100%);
+  opacity: 0;
+  transition:
+    transform 0.2s ease-out,
+    opacity 0.2s ease-out;
+}
+
+.provider-preview-overlay[data-expanded="true"] {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-pin,
+  .explore-filterbar-layout,
+  .explore-filterbar-shell,
+  .explore-filterbar-panel,
+  .explore-filter-tab,
+  .provider-card-shell,
+  .provider-preview-overlay {
+    transition: none !important;
+    transform: none !important;
+    animation: none !important;
+  }
+
+  .provider-preview-overlay[data-expanded="false"] {
+    opacity: 1;
+  }
+
+  .explore-filterbar-shell--collapsed .explore-filterbar-panel,
+  .explore-filterbar-shell--collapsing .explore-filterbar-panel {
+    transform: none;
+  }
+
+  .explore-filter-tab-row--visible .explore-filter-tab {
+    transform: none;
+    opacity: 1;
+  }
 }
 
 @media print {
+  @page {
+    margin: 16mm;
+  }
+
   body * {
     visibility: hidden;
   }
   #pos-ticket,
-  #pos-ticket * {
+  #pos-ticket *,
+  #report-print,
+  #report-print *,
+  #report-print-f10,
+  #report-print-f10 * {
     visibility: visible;
   }
-  #pos-ticket {
+  #pos-ticket,
+  #report-print,
+  #report-print-f10 {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
+    background: white;
+    color: #0f172a;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  #report-print .report-bar,
+  #report-print-f10 .report-bar {
+    fill: #334155;
+  }
+  #report-print .report-data-table,
+  #report-print-f10 .report-data-table {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    margin-top: 0.5rem;
+    overflow: visible !important;
+    clip: auto !important;
+    clip-path: none !important;
+    white-space: normal !important;
   }
 }
 

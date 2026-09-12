@@ -5,16 +5,58 @@ import {
 } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { formatMoney, formatQuantity, toDecimal } from "@/lib/money";
+import type { ProviderReport } from "@/lib/api/types";
 import {
   addCalendarDays,
   DASHBOARD_TZ,
+  monthsInYear,
+  monterreyDayStartUtc,
+  reportWindowUtc,
   rollingWindowUtc,
+  type ReportGrain,
   ymdInTimeZone,
+  ymdsInMonth,
 } from "@/lib/timezone";
 import { resolveProviderByUserId } from "@/lib/services/order.service";
+import { OrderForbiddenError } from "@/lib/orders/errors";
 
 function emptyKpi() {
   return { salesTotal: formatMoney(0), orderCount: 0 };
+}
+
+function emptySourceKpi() {
+  return { gmv: formatMoney(0), orderCount: 0 };
+}
+
+function topProductsQuery(providerId: string, from: Date, to: Date) {
+  return prisma.$queryRaw<
+    Array<{
+      provider_product_id: string | null;
+      name: string;
+      sales_total: Prisma.Decimal;
+      quantity_sum: Prisma.Decimal;
+    }>
+  >`
+    SELECT
+      oi.provider_product_id,
+      CASE
+        WHEN oi.provider_product_id IS NULL THEN 'Venta rápida'
+        ELSE MAX(oi.item_name)
+      END AS name,
+      COALESCE(SUM(oi.subtotal), 0) AS sales_total,
+      COALESCE(SUM(oi.quantity), 0) AS quantity_sum
+    FROM order_items oi
+    INNER JOIN orders o ON o.id = oi.order_id
+    LEFT JOIN provider_products pp ON pp.id = oi.provider_product_id
+    WHERE o.provider_id = ${providerId}
+      AND o.status <> 'CANCELLED'::"OrderStatus"
+      AND o.created_at >= ${from}
+      AND o.created_at < ${to}
+      AND (oi.provider_product_id IS NULL OR pp.is_available = true)
+    GROUP BY oi.provider_product_id
+    ORDER BY SUM(oi.subtotal) DESC
+    LIMIT 5
+  `;
 }
 
 export async function getProviderDashboard(params: {
@@ -86,34 +128,7 @@ export async function getProviderDashboard(params: {
       GROUP BY 1
       ORDER BY 1
     `,
-    prisma.$queryRaw<
-      Array<{
-        provider_product_id: string | null;
-        name: string;
-        sales_total: Prisma.Decimal;
-        quantity_sum: Prisma.Decimal;
-      }>
-    >`
-      SELECT
-        oi.provider_product_id,
-        CASE
-          WHEN oi.provider_product_id IS NULL THEN 'Venta rápida'
-          ELSE MAX(oi.item_name)
-        END AS name,
-        COALESCE(SUM(oi.subtotal), 0) AS sales_total,
-        COALESCE(SUM(oi.quantity), 0) AS quantity_sum
-      FROM order_items oi
-      INNER JOIN orders o ON o.id = oi.order_id
-      LEFT JOIN provider_products pp ON pp.id = oi.provider_product_id
-      WHERE o.provider_id = ${provider.id}
-        AND o.status <> 'CANCELLED'::"OrderStatus"
-        AND o.created_at >= ${d30.start}
-        AND o.created_at < ${d30.end}
-        AND (oi.provider_product_id IS NULL OR pp.is_available = true)
-      GROUP BY oi.provider_product_id
-      ORDER BY SUM(oi.subtotal) DESC
-      LIMIT 5
-    `,
+    topProductsQuery(provider.id, d30.start, d30.end),
   ]);
 
   const sourceMap = new Map(
@@ -186,5 +201,338 @@ export async function getProviderDashboard(params: {
       quantitySum: formatQuantity(toDecimal(row.quantity_sum)),
     })),
     empty: kpis.d30.orderCount === 0,
+  };
+}
+
+function seriesQuery(grain: "month" | "year", providerId: string, from: Date, to: Date) {
+  if (grain === "year") {
+    return prisma.$queryRaw<
+      Array<{ bucket: string; gmv: Prisma.Decimal; order_count: bigint }>
+    >`
+      SELECT
+        to_char((created_at AT TIME ZONE ${DASHBOARD_TZ}), 'YYYY-MM') AS bucket,
+        COALESCE(SUM(total), 0) AS gmv,
+        COUNT(*)::bigint AS order_count
+      FROM orders
+      WHERE provider_id = ${providerId}
+        AND status <> 'CANCELLED'::"OrderStatus"
+        AND created_at >= ${from}
+        AND created_at < ${to}
+      GROUP BY 1
+      ORDER BY 1
+    `;
+  }
+
+  return prisma.$queryRaw<
+    Array<{ bucket: string; gmv: Prisma.Decimal; order_count: bigint }>
+  >`
+    SELECT
+      (created_at AT TIME ZONE ${DASHBOARD_TZ})::date::text AS bucket,
+      COALESCE(SUM(total), 0) AS gmv,
+      COUNT(*)::bigint AS order_count
+    FROM orders
+    WHERE provider_id = ${providerId}
+      AND status <> 'CANCELLED'::"OrderStatus"
+      AND created_at >= ${from}
+      AND created_at < ${to}
+    GROUP BY 1
+    ORDER BY 1
+  `;
+}
+
+export async function getProviderReport(params: {
+  userId: string;
+  grain: ReportGrain;
+  date: string;
+  now?: Date;
+}): Promise<ProviderReport> {
+  const provider = await resolveProviderByUserId(params.userId);
+  const now = params.now ?? new Date();
+  const { from, to } = reportWindowUtc(params.grain, params.date);
+
+  const notCancelled: Prisma.OrderWhereInput = {
+    providerId: provider.id,
+    status: { not: OrderStatus.CANCELLED },
+    createdAt: { gte: from, lt: to },
+  };
+
+  const [kpi, bySourceRows, seriesRows, topRows] = await Promise.all([
+    prisma.order.aggregate({
+      where: notCancelled,
+      _sum: { total: true },
+      _count: true,
+    }),
+    prisma.order.groupBy({
+      by: ["source"],
+      where: notCancelled,
+      _sum: { total: true },
+      _count: true,
+    }),
+    params.grain === "day"
+      ? Promise.resolve(
+          [] as Array<{ bucket: string; gmv: Prisma.Decimal; order_count: bigint }>
+        )
+      : seriesQuery(params.grain, provider.id, from, to),
+    topProductsQuery(provider.id, from, to),
+  ]);
+
+  const sourceMap = new Map(
+    bySourceRows.map((row) => [
+      row.source,
+      {
+        gmv: formatMoney(row._sum.total ?? 0),
+        orderCount: row._count,
+      },
+    ])
+  );
+
+  const orderCount = kpi._count;
+  const gmv = formatMoney(kpi._sum.total ?? 0);
+  const avgTicket =
+    orderCount === 0
+      ? formatMoney(0)
+      : formatMoney(toDecimal(kpi._sum.total ?? 0).div(orderCount));
+
+  const seriesByBucket = new Map(
+    seriesRows.map((row) => [
+      row.bucket,
+      {
+        gmv: formatMoney(row.gmv),
+        orderCount: Number(row.order_count),
+      },
+    ])
+  );
+
+  let series: ProviderReport["series"] = [];
+  if (params.grain === "month") {
+    series = ymdsInMonth(params.date).map((bucket) => {
+      const point = seriesByBucket.get(bucket);
+      return {
+        bucket,
+        gmv: point?.gmv ?? formatMoney(0),
+        orderCount: point?.orderCount ?? 0,
+      };
+    });
+  } else if (params.grain === "year") {
+    series = monthsInYear(params.date).map((bucket) => {
+      const point = seriesByBucket.get(bucket);
+      return {
+        bucket,
+        gmv: point?.gmv ?? formatMoney(0),
+        orderCount: point?.orderCount ?? 0,
+      };
+    });
+  }
+
+  return {
+    empty: orderCount === 0,
+    timezone: DASHBOARD_TZ,
+    generatedAt: now.toISOString(),
+    provider: {
+      id: provider.id,
+      businessName: provider.businessName,
+    },
+    period: {
+      grain: params.grain,
+      date: params.date,
+      from: from.toISOString(),
+      to: to.toISOString(),
+    },
+    kpis: {
+      gmv,
+      avgTicket,
+      orderCount,
+      bySource: {
+        MARKETPLACE: sourceMap.get(OrderSource.MARKETPLACE) ?? emptySourceKpi(),
+        POS: sourceMap.get(OrderSource.POS) ?? emptySourceKpi(),
+      },
+    },
+    series,
+    topProducts: topRows.map((row) => ({
+      providerProductId: row.provider_product_id,
+      name: row.name,
+      salesTotal: formatMoney(row.sales_total),
+      quantitySum: formatQuantity(toDecimal(row.quantity_sum)),
+    })),
+  };
+}
+
+function ymdsInInclusiveRange(from: string, to: string): string[] {
+  const days: string[] = [];
+  let cursor = from;
+  while (cursor <= to) {
+    days.push(cursor);
+    cursor = addCalendarDays(cursor, 1);
+  }
+  return days;
+}
+
+export async function getProviderReportRange(params: {
+  userId: string;
+  from: string;
+  to: string;
+  productIds: string[];
+  now?: Date;
+}): Promise<ProviderReport> {
+  const provider = await resolveProviderByUserId(params.userId);
+  const now = params.now ?? new Date();
+  const fromUtc = monterreyDayStartUtc(params.from);
+  const toExclusiveUtc = monterreyDayStartUtc(addCalendarDays(params.to, 1));
+
+  const includeQuickSale = params.productIds.includes("quickSale");
+  const requestedIds = [...new Set(params.productIds.filter((id) => id !== "quickSale"))];
+  const filterByIds = params.productIds.length > 0;
+
+  if (requestedIds.length > 0) {
+    const owned = await prisma.providerProduct.findMany({
+      where: { providerId: provider.id, id: { in: requestedIds } },
+      select: { id: true },
+    });
+    if (owned.length !== requestedIds.length) {
+      throw new OrderForbiddenError();
+    }
+  }
+
+  const orders = await prisma.order.findMany({
+    where: {
+      providerId: provider.id,
+      status: { not: OrderStatus.CANCELLED },
+      createdAt: { gte: fromUtc, lt: toExclusiveUtc },
+    },
+    include: { items: true },
+  });
+
+  type Agg = {
+    name: string;
+    quantity: ReturnType<typeof toDecimal>;
+    gmv: ReturnType<typeof toDecimal>;
+    marketplaceGmv: ReturnType<typeof toDecimal>;
+    marketplaceQty: ReturnType<typeof toDecimal>;
+    posGmv: ReturnType<typeof toDecimal>;
+    posQty: ReturnType<typeof toDecimal>;
+  };
+
+  const productMap = new Map<string, Agg>();
+  const sourceGmv = {
+    MARKETPLACE: toDecimal(0),
+    POS: toDecimal(0),
+  };
+  const sourceOrders = { MARKETPLACE: new Set<string>(), POS: new Set<string>() };
+  const orderIds = new Set<string>();
+  const seriesMap = new Map<string, { gmv: ReturnType<typeof toDecimal>; orders: Set<string> }>();
+  let gmvTotal = toDecimal(0);
+
+  const idKey = (providerProductId: string | null) =>
+    providerProductId ?? "quickSale";
+
+  for (const order of orders) {
+    const included = order.items.filter((item) => {
+      if (!filterByIds) return true;
+      if (item.providerProductId == null) return includeQuickSale;
+      return requestedIds.includes(item.providerProductId);
+    });
+    if (included.length === 0) continue;
+
+    orderIds.add(order.id);
+    sourceOrders[order.source].add(order.id);
+    const bucket = ymdInTimeZone(order.createdAt, DASHBOARD_TZ);
+    if (!seriesMap.has(bucket)) {
+      seriesMap.set(bucket, { gmv: toDecimal(0), orders: new Set() });
+    }
+    const seriesPoint = seriesMap.get(bucket)!;
+    seriesPoint.orders.add(order.id);
+
+    for (const item of included) {
+      const sub = toDecimal(item.subtotal);
+      const qty = toDecimal(item.quantity);
+      gmvTotal = gmvTotal.add(sub);
+      sourceGmv[order.source] = sourceGmv[order.source].add(sub);
+      seriesPoint.gmv = seriesPoint.gmv.add(sub);
+
+      const key = idKey(item.providerProductId);
+      const current = productMap.get(key) ?? {
+        name: item.providerProductId == null ? "Venta rápida" : item.itemName,
+        quantity: toDecimal(0),
+        gmv: toDecimal(0),
+        marketplaceGmv: toDecimal(0),
+        marketplaceQty: toDecimal(0),
+        posGmv: toDecimal(0),
+        posQty: toDecimal(0),
+      };
+      current.quantity = current.quantity.add(qty);
+      current.gmv = current.gmv.add(sub);
+      if (order.source === OrderSource.MARKETPLACE) {
+        current.marketplaceGmv = current.marketplaceGmv.add(sub);
+        current.marketplaceQty = current.marketplaceQty.add(qty);
+      } else {
+        current.posGmv = current.posGmv.add(sub);
+        current.posQty = current.posQty.add(qty);
+      }
+      productMap.set(key, current);
+    }
+  }
+
+  const orderCount = orderIds.size;
+  const avgTicket =
+    orderCount === 0 ? formatMoney(0) : formatMoney(gmvTotal.div(orderCount));
+
+  const series = ymdsInInclusiveRange(params.from, params.to).map((bucket) => {
+    const point = seriesMap.get(bucket);
+    return {
+      bucket,
+      gmv: formatMoney(point?.gmv ?? 0),
+      orderCount: point?.orders.size ?? 0,
+    };
+  });
+
+  const products = [...productMap.entries()].map(([key, row]) => ({
+    providerProductId: key === "quickSale" ? null : key,
+    name: row.name,
+    quantitySum: formatQuantity(row.quantity),
+    salesTotal: formatMoney(row.gmv),
+    bySource: {
+      MARKETPLACE: {
+        gmv: formatMoney(row.marketplaceGmv),
+        quantitySum: formatQuantity(row.marketplaceQty),
+      },
+      POS: {
+        gmv: formatMoney(row.posGmv),
+        quantitySum: formatQuantity(row.posQty),
+      },
+    },
+  }));
+
+  return {
+    empty: orderCount === 0,
+    timezone: DASHBOARD_TZ,
+    generatedAt: now.toISOString(),
+    provider: {
+      id: provider.id,
+      businessName: provider.businessName,
+    },
+    period: {
+      mode: "range",
+      from: params.from,
+      to: params.to,
+      fromUtc: fromUtc.toISOString(),
+      toUtc: toExclusiveUtc.toISOString(),
+    },
+    kpis: {
+      gmv: formatMoney(gmvTotal),
+      avgTicket,
+      orderCount,
+      bySource: {
+        MARKETPLACE: {
+          gmv: formatMoney(sourceGmv.MARKETPLACE),
+          orderCount: sourceOrders.MARKETPLACE.size,
+        },
+        POS: {
+          gmv: formatMoney(sourceGmv.POS),
+          orderCount: sourceOrders.POS.size,
+        },
+      },
+    },
+    series,
+    products,
   };
 }

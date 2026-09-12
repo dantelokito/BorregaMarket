@@ -24,7 +24,7 @@ export function SubNavProveedor() {
 
   return (
     <nav
-      className="border-b border-gray-200 bg-white"
+      className="no-print border-b border-gray-200 bg-white"
       aria-label="Panel proveedor"
     >
       <ul className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4" role="list">

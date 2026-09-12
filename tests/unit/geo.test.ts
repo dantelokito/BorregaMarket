@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { haversineKm, roundDistanceKm } from "@/lib/geo/haversine";
 import { AVG_SPEED_KMH, computeEtaMinutes } from "@/lib/geo/eta";
-import { isWithinMonterreyBounds } from "@/lib/geo/bounds";
+import { isInMexico, isWithinMonterreyBounds } from "@/lib/geo/bounds";
+import { clampGeoRadiusKm } from "@/lib/validators/geo";
 
 describe("haversineKm", () => {
   it("returns 0 for the same point", () => {
@@ -43,5 +44,26 @@ describe("Monterrey bounds", () => {
   it("accepts downtown and rejects far coords", () => {
     expect(isWithinMonterreyBounds(25.67, -100.31)).toBe(true);
     expect(isWithinMonterreyBounds(19.43, -99.13)).toBe(false);
+  });
+});
+
+describe("clampGeoRadiusKm", () => {
+  it("keeps 0.5, 10 and 0.7 without rounding", () => {
+    expect(clampGeoRadiusKm(0.5)).toBe(0.5);
+    expect(clampGeoRadiusKm(10)).toBe(10);
+    expect(clampGeoRadiusKm(0.7)).toBe(0.7);
+  });
+
+  it("clamps below min to 0.5 and above max to 10", () => {
+    expect(clampGeoRadiusKm(0)).toBe(0.5);
+    expect(clampGeoRadiusKm(22)).toBe(10);
+  });
+});
+
+describe("isInMexico", () => {
+  it("accepts San Nicolás and CDMX, rejects north of the rectangle", () => {
+    expect(isInMexico(25.7475, -100.283)).toBe(true);
+    expect(isInMexico(19.43, -99.13)).toBe(true);
+    expect(isInMexico(33.0, -99.0)).toBe(false);
   });
 });

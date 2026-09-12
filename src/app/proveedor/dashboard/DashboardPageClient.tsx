@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getProviderDashboard } from "@/lib/api/provider-ops";
 import { ApiError } from "@/lib/api/client";
 import type { DashboardSummary, OrderStatus } from "@/lib/api/types";
@@ -10,6 +11,10 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { QuickSaleBadge } from "@/components/ui/QuickSaleBadge";
 import { formatCurrency, formatQty } from "@/lib/format";
 import { ORDER_STATUS_LABEL } from "@/lib/orders/labels";
+import { parseDashboardView } from "@/lib/reports/period";
+import { currentMonthShortcut } from "@/lib/reports/date-range";
+import { DashboardViewSwitcher } from "@/components/provider/reports/DashboardViewSwitcher";
+import { ReportsView } from "@/components/provider/reports/ReportsView";
 
 function KpiCard({ label, amount, count }: { label: string; amount: string; count: number }) {
   return (
@@ -87,7 +92,7 @@ function BarChartIlustrativo({
   );
 }
 
-export function DashboardPageClient() {
+function DashboardSummaryView() {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -111,7 +116,7 @@ export function DashboardPageClient() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 px-6 py-8">
+      <div className="space-y-4">
         <div className="grid gap-4 md:grid-cols-3">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-28 animate-pulse rounded-xl bg-gray-200" />
@@ -123,38 +128,30 @@ export function DashboardPageClient() {
   }
 
   if (error) {
-    return (
-      <div className="mx-auto max-w-5xl px-6 py-8">
-        <ErrorBanner message={error} onRetry={() => void load()} />
-      </div>
-    );
+    return <ErrorBanner message={error} onRetry={() => void load()} />;
   }
 
   if (!data || data.empty) {
     return (
-      <div className="mx-auto max-w-5xl px-6 py-8">
-        <h1 className="mb-4 text-2xl font-bold">Ventas</h1>
-        <EmptyState
-          title="Todavía no hay ventas registradas"
-          description="Cobra en el POS o espera el primer encargo de la app."
-          action={
-            <Link
-              href="/proveedor/pos"
-              className="inline-flex min-h-11 items-center rounded-lg bg-[var(--brand)] px-4 py-3 font-semibold text-white"
-            >
-              Abrir POS
-            </Link>
-          }
-        />
-      </div>
+      <EmptyState
+        title="Todavía no hay ventas registradas"
+        description="Cobra en el POS o espera el primer encargo de la app."
+        action={
+          <Link
+            href="/proveedor/pos"
+            className="inline-flex min-h-11 items-center rounded-lg bg-[var(--brand)] px-4 py-3 font-semibold text-white"
+          >
+            Abrir POS
+          </Link>
+        }
+      />
     );
   }
 
   const statuses = Object.keys(data.statusToday) as OrderStatus[];
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
-      <h1 className="mb-6 text-2xl font-bold">Ventas</h1>
+    <div>
       <div className="grid gap-4 md:grid-cols-3">
         <KpiCard label="Hoy" amount={data.kpis.d1.salesTotal} count={data.kpis.d1.orderCount} />
         <KpiCard label="Últimos 7 días" amount={data.kpis.d7.salesTotal} count={data.kpis.d7.orderCount} />
@@ -221,5 +218,55 @@ export function DashboardPageClient() {
         </div>
       </section>
     </div>
+  );
+}
+
+function DashboardShell() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const view = parseDashboardView(searchParams.get("view"));
+
+  function setView(next: "resumen" | "reportes") {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "resumen") {
+      params.delete("view");
+      params.delete("grain");
+      params.delete("date");
+      params.delete("from");
+      params.delete("to");
+      params.delete("productIds");
+    } else {
+      params.set("view", "reportes");
+      params.delete("grain");
+      params.delete("date");
+      const range = currentMonthShortcut();
+      if (!params.get("from")) params.set("from", range.from);
+      if (!params.get("to")) params.set("to", range.to);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/proveedor/dashboard?${qs}` : "/proveedor/dashboard", { scroll: false });
+  }
+
+  return (
+    <div className="mx-auto max-w-5xl px-6 py-8">
+      <h1 className="no-print mb-4 text-2xl font-bold">Ventas</h1>
+      <DashboardViewSwitcher view={view} onChange={setView} />
+      {view === "reportes" ? <ReportsView /> : <DashboardSummaryView />}
+    </div>
+  );
+}
+
+export function DashboardPageClient() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-5xl space-y-4 px-6 py-8">
+          <div className="h-10 w-48 animate-pulse rounded bg-gray-200" />
+          <div className="h-11 w-full animate-pulse rounded bg-gray-200" />
+        </div>
+      }
+    >
+      <DashboardShell />
+    </Suspense>
   );
 }

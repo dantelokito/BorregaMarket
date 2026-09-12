@@ -15,6 +15,10 @@ vi.mock("@/lib/auth/session", async () => {
   };
 });
 
+vi.mock("@/lib/auth/permissions", () => ({
+  hasModulePermission: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("@/lib/services/admin-analytics.service", () => ({
   getAdminAnalytics: (...args: unknown[]) => getAdminAnalytics(...args),
 }));

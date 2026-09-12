@@ -25,6 +25,7 @@ function serializeAddress(address: {
   lng: number;
   isFavorite: boolean;
   isDefault: boolean;
+  lastUsedAt: Date | null;
   createdAt: Date;
 }) {
   return {
@@ -35,6 +36,7 @@ function serializeAddress(address: {
     lng: address.lng,
     isFavorite: address.isFavorite,
     isDefault: address.isDefault,
+    lastUsedAt: address.lastUsedAt?.toISOString() ?? null,
     createdAt: address.createdAt.toISOString(),
   };
 }
@@ -42,7 +44,12 @@ function serializeAddress(address: {
 export async function listAddresses(userId: string) {
   const addresses = await prisma.userAddress.findMany({
     where: { userId },
-    orderBy: [{ isDefault: "desc" }, { isFavorite: "desc" }, { createdAt: "desc" }],
+    orderBy: [
+      { lastUsedAt: { sort: "desc", nulls: "last" } },
+      { isDefault: "desc" },
+      { isFavorite: "desc" },
+      { createdAt: "desc" },
+    ],
   });
   return addresses.map(serializeAddress);
 }
@@ -122,4 +129,18 @@ export async function deleteAddress(userId: string, addressId: string) {
   }
   await prisma.userAddress.delete({ where: { id: addressId } });
   return { id: addressId, deleted: true };
+}
+
+export async function markLastUsed(userId: string, addressId: string) {
+  const existing = await prisma.userAddress.findFirst({
+    where: { id: addressId, userId },
+  });
+  if (!existing) {
+    throw new AddressNotFoundError();
+  }
+  const updated = await prisma.userAddress.update({
+    where: { id: addressId },
+    data: { lastUsedAt: new Date() },
+  });
+  return serializeAddress(updated);
 }
