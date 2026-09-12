@@ -1,12 +1,18 @@
-import { SystemModule, AuditAction } from "@prisma/client";
+import { AuditAction, ProductScope, SystemModule } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+import {
+  CatalogForbiddenError,
+  CatalogNotFoundError,
+  WrongProductRouteError,
+} from "@/lib/services/local-product.service";
 
 export interface UpsertProviderProductInput {
   productId: string;
   isAvailable: boolean;
   price?: number;
+  sectionId?: string;
 }
 
 export async function getProviderCatalog(userId: string) {
@@ -15,14 +21,20 @@ export async function getProviderCatalog(userId: string) {
     throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
   }
 
-  const allProducts = await prisma.product.findMany({
-    where: { isActive: true },
-    orderBy: [{ category: "asc" }, { name: "asc" }],
-  });
-
-  const providerProducts = await prisma.providerProduct.findMany({
-    where: { providerId: provider.id },
-  });
+  const [allProducts, providerProducts] = await Promise.all([
+    prisma.product.findMany({
+      where: {
+        OR: [
+          { scope: ProductScope.GLOBAL, isActive: true },
+          { scope: ProductScope.LOCAL, ownerProviderId: provider.id },
+        ],
+      },
+    }),
+    prisma.providerProduct.findMany({
+      where: { providerId: provider.id },
+      include: { section: true },
+    }),
+  ]);
 
   const ppMap = new Map(providerProducts.map((pp) => [pp.productId, pp]));
 
@@ -36,11 +48,22 @@ export async function getProviderCatalog(userId: string) {
         category: product.category,
         unit: product.unit,
         description: product.description,
+        imageUrl: pp?.imageUrl ?? product.imageUrl,
       },
       price: pp ? Number(pp.price) : null,
       isAvailable: pp?.isAvailable ?? false,
       providerProductId: pp?.id ?? null,
+      scope: product.scope,
+      sectionId: pp?.sectionId ?? null,
+      sectionName: pp?.section?.name ?? null,
+      imageUrl: pp?.imageUrl ?? product.imageUrl,
+      sortOrder: pp?.section?.sortOrder ?? Number.MAX_SAFE_INTEGER,
     };
+  });
+
+  catalog.sort((a, b) => {
+    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+    return a.product.name.localeCompare(b.product.name, "es");
   });
 
   return {
@@ -48,7 +71,7 @@ export async function getProviderCatalog(userId: string) {
       id: provider.id,
       businessName: provider.businessName,
     },
-    catalog,
+    catalog: catalog.map(({ sortOrder: _s, ...row }) => row),
   };
 }
 
@@ -60,6 +83,25 @@ export async function upsertProviderProduct(
   const provider = await prisma.provider.findUnique({ where: { userId } });
   if (!provider) {
     throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
+  }
+
+  const product = await prisma.product.findUnique({ where: { id: input.productId } });
+  if (!product) {
+    throw new CatalogNotFoundError("Producto no encontrado");
+  }
+  if (product.scope === ProductScope.LOCAL) {
+    if (product.ownerProviderId !== provider.id) {
+      throw new CatalogForbiddenError();
+    }
+    throw new WrongProductRouteError();
+  }
+
+  if (input.sectionId) {
+    const section = await prisma.providerSection.findUnique({
+      where: { id: input.sectionId },
+    });
+    if (!section) throw new CatalogNotFoundError("Sección no encontrada");
+    if (section.providerId !== provider.id) throw new CatalogForbiddenError();
   }
 
   const existing = await prisma.providerProduct.findUnique({
@@ -75,6 +117,7 @@ export async function upsertProviderProduct(
       data: {
         isAvailable: input.isAvailable,
         ...(input.price !== undefined ? { price: input.price } : {}),
+        ...(input.sectionId !== undefined ? { sectionId: input.sectionId } : {}),
       },
       include: { product: true },
     });
@@ -85,6 +128,7 @@ export async function upsertProviderProduct(
         productId: input.productId,
         price: input.price,
         isAvailable: input.isAvailable,
+        ...(input.sectionId ? { sectionId: input.sectionId } : {}),
       },
       include: { product: true },
     });

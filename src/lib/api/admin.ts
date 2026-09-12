@@ -1,5 +1,11 @@
-import { apiDelete, apiGet, apiPatch, apiPostForm, buildQuery } from "./client";
-import type { AdminAnalytics, AdminProvider, AnalyticsRange, AuditLogEntry } from "./types";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm, buildQuery } from "./client";
+import type {
+  AdminAnalytics,
+  AdminProduct,
+  AdminProvider,
+  AnalyticsRange,
+  AuditLogEntry,
+} from "./types";
 
 export async function getAdminProviders(
   query: { verified?: boolean; page?: number; limit?: number } = {}
@@ -14,6 +20,55 @@ export async function getAdminProviders(
 
 export async function updateProviderVerification(id: string, isVerified: boolean) {
   return apiPatch<AdminProvider>(`/api/admin/providers/${id}`, { isVerified });
+}
+
+export async function updateProviderFlags(
+  id: string,
+  flags: {
+    isVerified?: boolean;
+    isActive?: boolean;
+    offersWholesale?: boolean;
+    offersDelivery?: boolean;
+  }
+) {
+  return apiPatch<AdminProvider>(`/api/admin/providers/${id}`, flags);
+}
+
+export async function getAdminProducts(
+  query: { q?: string; isActive?: boolean; page?: number; limit?: number } = {}
+) {
+  const qs = buildQuery({
+    q: query.q,
+    isActive: query.isActive === undefined ? undefined : String(query.isActive),
+    page: query.page,
+    limit: query.limit,
+  });
+  return apiGet<AdminProduct[]>(`/api/admin/products${qs}`);
+}
+
+export async function createAdminProduct(input: {
+  name: string;
+  slug?: string;
+  description?: string | null;
+  category: "FRUTA" | "VERDURA" | "AGRICOLA";
+  unit: "KG" | "PIEZA" | "MANOJO" | "CAJA" | "LITRO" | "GRAMO";
+  isActive?: boolean;
+}) {
+  return apiPost<AdminProduct>("/api/admin/products", input);
+}
+
+export async function patchAdminProduct(
+  id: string,
+  input: {
+    name?: string;
+    slug?: string;
+    description?: string | null;
+    category?: "FRUTA" | "VERDURA" | "AGRICOLA";
+    unit?: "KG" | "PIEZA" | "MANOJO" | "CAJA" | "LITRO" | "GRAMO";
+    isActive?: boolean;
+  }
+) {
+  return apiPatch<AdminProduct>(`/api/admin/products/${id}`, input);
 }
 
 export async function getAuditLog(

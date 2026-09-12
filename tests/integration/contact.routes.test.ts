@@ -24,6 +24,10 @@ vi.mock("next/server", async () => {
 });
 
 import { POST } from "@/app/api/providers/[id]/contact/route";
+import {
+  ContactRateLimitError,
+  ContactRedisUnavailableError,
+} from "@/lib/services/contact.service";
 
 function jsonRequest(url: string, body?: unknown) {
   return new NextRequest(new URL(url, "http://localhost:8080"), {
@@ -49,5 +53,26 @@ describe("contact route ADR-015", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.notified).toBe(true);
+  });
+
+  it("returns 429 when the contact rate limit is exceeded", async () => {
+    registerContact.mockRejectedValue(new ContactRateLimitError());
+    const res = await POST(jsonRequest("/api/providers/p1/contact", { source: "call_button" }), {
+      params: Promise.resolve({ id: "p1" }),
+    });
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error).toBe("Demasiados intentos. Intenta más tarde.");
+  });
+
+  it("returns 503 envelope when Redis is unavailable in production", async () => {
+    registerContact.mockRejectedValue(new ContactRedisUnavailableError());
+    const res = await POST(jsonRequest("/api/providers/p1/contact", { source: "call_button" }), {
+      params: Promise.resolve({ id: "p1" }),
+    });
+    expect(res.status).toBe(503);
+    expect(res.status).not.toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe("Servicio no disponible. Intenta más tarde.");
   });
 });

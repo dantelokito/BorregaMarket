@@ -75,7 +75,10 @@ export async function fetchCatalogData(catalog: string): Promise<unknown> {
       });
 
     case "products":
-      return prisma.product.findMany({ orderBy: { name: "asc" } });
+      return prisma.product.findMany({
+        where: { scope: "GLOBAL" },
+        orderBy: { name: "asc" },
+      });
 
     case "provider-products":
       return prisma.providerProduct.findMany({

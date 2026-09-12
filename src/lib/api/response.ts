@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { RateLimitError } from "@/lib/rate-limit/token-bucket";
+import { LastAdminError } from "@/lib/auth/assert-not-last-admin";
 
 export interface FieldError {
   field: string;
@@ -43,6 +45,12 @@ export function handleRouteError(err: unknown) {
   if (err instanceof ZodError) {
     const details = fromZodError(err);
     return apiError("Validation failed", 400, details);
+  }
+  if (err instanceof RateLimitError) {
+    return apiError(err.message, 429);
+  }
+  if (err instanceof LastAdminError) {
+    return apiError(err.message, 409, err.details());
   }
   return apiError("Error interno", 500);
 }

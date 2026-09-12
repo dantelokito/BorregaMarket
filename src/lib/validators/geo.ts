@@ -1,20 +1,39 @@
 import { z } from "zod";
 import {
+  MEXICO_BOUNDS,
   MONTERREY_LAT_MAX,
   MONTERREY_LAT_MIN,
   MONTERREY_LNG_MAX,
   MONTERREY_LNG_MIN,
 } from "@/lib/geo/bounds";
 
+/** CO-F8-001: mismo clamp FE/BE; sin Math.round (rompe 0.5). */
+export const MIN_RADIUS_KM = 0.5;
+export const MAX_RADIUS_KM = 10;
+export const DEFAULT_RADIUS_KM = 10;
+
+const MEXICO_OUT_OF_BOUNDS = "Ubicación fuera de México";
+const MONTERREY_OUT_OF_BOUNDS = "Ubicación fuera del área de Monterrey";
+
 export const monterreyLatSchema = z
-  .number({ invalid_type_error: "Ubicación fuera del área de Monterrey" })
-  .min(MONTERREY_LAT_MIN, "Ubicación fuera del área de Monterrey")
-  .max(MONTERREY_LAT_MAX, "Ubicación fuera del área de Monterrey");
+  .number({ invalid_type_error: MONTERREY_OUT_OF_BOUNDS })
+  .min(MONTERREY_LAT_MIN, MONTERREY_OUT_OF_BOUNDS)
+  .max(MONTERREY_LAT_MAX, MONTERREY_OUT_OF_BOUNDS);
 
 export const monterreyLngSchema = z
-  .number({ invalid_type_error: "Ubicación fuera del área de Monterrey" })
-  .min(MONTERREY_LNG_MIN, "Ubicación fuera del área de Monterrey")
-  .max(MONTERREY_LNG_MAX, "Ubicación fuera del área de Monterrey");
+  .number({ invalid_type_error: MONTERREY_OUT_OF_BOUNDS })
+  .min(MONTERREY_LNG_MIN, MONTERREY_OUT_OF_BOUNDS)
+  .max(MONTERREY_LNG_MAX, MONTERREY_OUT_OF_BOUNDS);
+
+export const mexicoLatSchema = z
+  .number({ invalid_type_error: MEXICO_OUT_OF_BOUNDS })
+  .min(MEXICO_BOUNDS.south, MEXICO_OUT_OF_BOUNDS)
+  .max(MEXICO_BOUNDS.north, MEXICO_OUT_OF_BOUNDS);
+
+export const mexicoLngSchema = z
+  .number({ invalid_type_error: MEXICO_OUT_OF_BOUNDS })
+  .min(MEXICO_BOUNDS.west, MEXICO_OUT_OF_BOUNDS)
+  .max(MEXICO_BOUNDS.east, MEXICO_OUT_OF_BOUNDS);
 
 function optionalNumber(raw: string | null): number | undefined {
   if (raw === null || raw === "") return undefined;
@@ -60,7 +79,7 @@ export const geoListQuerySchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["lat"],
-        message: "Ubicación fuera del área de Monterrey",
+        message: "Debe ser un número",
       });
       return;
     }
@@ -68,35 +87,35 @@ export const geoListQuerySchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["lng"],
-        message: "Ubicación fuera del área de Monterrey",
+        message: "Debe ser un número",
       });
       return;
     }
 
-    const latCheck = monterreyLatSchema.safeParse(lat);
+    const latCheck = mexicoLatSchema.safeParse(lat);
     if (!latCheck.success) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["lat"],
-        message: "Ubicación fuera del área de Monterrey",
+        message: MEXICO_OUT_OF_BOUNDS,
       });
     }
-    const lngCheck = monterreyLngSchema.safeParse(lng);
+    const lngCheck = mexicoLngSchema.safeParse(lng);
     if (!lngCheck.success) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["lng"],
-        message: "Ubicación fuera del área de Monterrey",
+        message: MEXICO_OUT_OF_BOUNDS,
       });
     }
 
     if (hasRadius) {
       const radius = optionalNumber(val.radiusKm ?? null);
-      if (!Number.isFinite(radius) || radius! < 1 || radius! > 25) {
+      if (!Number.isFinite(radius)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["radiusKm"],
-          message: "Debe estar entre 1 y 25",
+          message: "Debe ser un número",
         });
       }
     }
@@ -108,12 +127,19 @@ export const geoListQuerySchema = z
     }
     const lat = Number(val.lat);
     const lng = Number(val.lng);
-    const radiusKm =
+    const rawRadius =
       val.radiusKm !== undefined && val.radiusKm !== null && val.radiusKm !== ""
         ? Number(val.radiusKm)
-        : 10;
-    return { geo: { lat, lng, radiusKm } };
+        : DEFAULT_RADIUS_KM;
+    return { geo: { lat, lng, radiusKm: clampGeoRadiusKm(rawRadius) } };
   });
+
+/** CO-F7-001: el servidor no deriva radio del viewport; CO-F8-001 clamp 0.5–10 (no 400). */
+export function clampGeoRadiusKm(value: number): number {
+  if (value < MIN_RADIUS_KM) return MIN_RADIUS_KM;
+  if (value > MAX_RADIUS_KM) return MAX_RADIUS_KM;
+  return value;
+}
 
 export const etaQuerySchema = z
   .object({

@@ -1,18 +1,88 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { Globe, Search, User, Menu } from "lucide-react";
 import { UserMenu } from "@/components/ui/UserMenu";
+import { ExploreTypeahead } from "@/components/explore/ExploreTypeahead";
+import { clampRadiusKm, type ProviderCategory } from "@/lib/api/providers";
+import { isInMexico } from "@/lib/geo/bounds";
+import { DEFAULT_RADIUS_KM } from "@/lib/maps/constants";
 import type { AuthUser } from "@/lib/api/types";
 
 interface HeaderProps {
   user?: AuthUser | null;
 }
 
+function parseCoord(raw: string | null): number | null {
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function ExploreHeaderSearch() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const qRaw = searchParams.get("q") ?? "";
+  const lat = parseCoord(searchParams.get("lat"));
+  const lng = parseCoord(searchParams.get("lng"));
+  const radiusKm = clampRadiusKm(parseCoord(searchParams.get("radiusKm")) ?? DEFAULT_RADIUS_KM);
+  const hasPin = lat != null && lng != null && isInMexico(lat, lng);
+  const verified = searchParams.get("verified") === "true";
+  const categoryRaw = searchParams.get("category");
+  const category =
+    categoryRaw === "FRUTA" || categoryRaw === "VERDURA" || categoryRaw === "AGRICOLA"
+      ? (categoryRaw as ProviderCategory)
+      : undefined;
+  const offersWholesale = searchParams.get("offersWholesale") === "true";
+  const offersDelivery = searchParams.get("offersDelivery") === "true";
+
+  function pushWith(mutate: (params: URLSearchParams) => void) {
+    const params = new URLSearchParams(searchParams.toString());
+    mutate(params);
+    const qs = params.toString();
+    router.push(qs ? `/explorar?${qs}` : "/explorar");
+  }
+
+  return (
+    <ExploreTypeahead
+      hasPin={hasPin}
+      lat={hasPin ? lat! : undefined}
+      lng={hasPin ? lng! : undefined}
+      radiusKm={hasPin ? radiusKm : undefined}
+      filters={{
+        verified: verified || undefined,
+        category,
+        offersWholesale: offersWholesale || undefined,
+        offersDelivery: offersDelivery || undefined,
+      }}
+      initialQuery={qRaw}
+      onApplyQuery={(q) => {
+        pushWith((params) => {
+          params.set("q", q);
+          params.delete("page");
+        });
+      }}
+      onClear={() => {
+        pushWith((params) => {
+          params.delete("q");
+          params.delete("verified");
+          params.delete("category");
+          params.delete("offersWholesale");
+          params.delete("offersDelivery");
+          params.delete("page");
+        });
+      }}
+    />
+  );
+}
+
 export function Header({ user = null }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const onExplore = pathname === "/explorar" || pathname?.startsWith("/explorar?");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -24,14 +94,13 @@ export function Header({ user = null }: HeaderProps) {
     } else if (raw.length === 0) {
       router.push("/explorar");
     } else {
-      // US-EXPLORE-02: min 2 chars — stay closed, do not hit API with invalid q
       return;
     }
     setSearchOpen(false);
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-gray-200 bg-white">
+    <header className="no-print sticky top-0 z-50 border-b border-gray-200 bg-white">
       <div className="mx-auto flex h-[80px] max-w-[1760px] items-center justify-between gap-4 px-6">
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <span className="text-2xl">🍊</span>
@@ -40,21 +109,33 @@ export function Header({ user = null }: HeaderProps) {
           </span>
         </Link>
 
-        <button
-          onClick={() => setSearchOpen(!searchOpen)}
-          aria-expanded={searchOpen}
-          aria-label="Abrir búsqueda"
-          className="mx-4 flex w-full max-w-[480px] items-center gap-0 divide-x divide-gray-300 rounded-full border border-gray-300 shadow-sm transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-        >
-          <span className="flex-1 truncate px-4 py-2.5 text-left text-sm font-medium text-gray-800">
-            Fruterías en tu zona
-          </span>
-          <span className="hidden px-4 py-2.5 text-sm text-gray-500 md:block">Hoy</span>
-          <span className="hidden px-4 py-2.5 text-sm text-gray-400 md:block">¿Qué buscas?</span>
-          <span className="m-1.5 rounded-full bg-[var(--brand)] p-2 text-white">
-            <Search size={16} />
-          </span>
-        </button>
+        {onExplore ? (
+          <div className="mx-4 w-full max-w-[480px]">
+            <Suspense
+              fallback={
+                <div className="h-11 w-full animate-pulse rounded-lg bg-slate-100" aria-hidden />
+              }
+            >
+              <ExploreHeaderSearch />
+            </Suspense>
+          </div>
+        ) : (
+          <button
+            onClick={() => setSearchOpen(!searchOpen)}
+            aria-expanded={searchOpen}
+            aria-label="Abrir búsqueda"
+            className="mx-4 flex w-full max-w-[480px] items-center gap-0 divide-x divide-gray-300 rounded-full border border-gray-300 shadow-sm transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
+          >
+            <span className="flex-1 truncate px-4 py-2.5 text-left text-sm font-medium text-gray-800">
+              Fruterías en tu zona
+            </span>
+            <span className="hidden px-4 py-2.5 text-sm text-gray-500 md:block">Hoy</span>
+            <span className="hidden px-4 py-2.5 text-sm text-gray-400 md:block">¿Qué buscas?</span>
+            <span className="m-1.5 rounded-full bg-[var(--brand)] p-2 text-white">
+              <Search size={16} />
+            </span>
+          </button>
+        )}
 
         <div className="flex shrink-0 items-center gap-2">
           {!user && (
@@ -87,7 +168,7 @@ export function Header({ user = null }: HeaderProps) {
         </div>
       </div>
 
-      {searchOpen && (
+      {!onExplore && searchOpen && (
         <div className="border-t border-gray-200 bg-white px-6 py-4 shadow-lg">
           <form onSubmit={handleSearch} className="mx-auto flex max-w-2xl gap-3">
             <input

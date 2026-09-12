@@ -1,6 +1,7 @@
 "use client";
 
-import { DEFAULT_RADIUS_KM, MAX_RADIUS_KM, MIN_RADIUS_KM } from "@/lib/maps/constants";
+import { DEFAULT_RADIUS_KM, MAX_RADIUS_KM, MIN_RADIUS_KM, RADIUS_STEP_KM } from "@/lib/maps/constants";
+import { formatRadius } from "@/lib/maps/format-radius";
 
 interface RadiusSliderProps {
   value: number;
@@ -10,30 +11,30 @@ interface RadiusSliderProps {
 
 export function RadiusSlider({ value, onChange, disabled }: RadiusSliderProps) {
   const km = Number.isFinite(value) ? value : DEFAULT_RADIUS_KM;
+  const label = formatRadius(km);
+
   return (
-    <div className="w-full">
-      <label htmlFor="radius-km" className="mb-1 block text-sm font-medium text-slate-600">
-        Radio: {km} km
+    <div className="flex items-center gap-2">
+      <label htmlFor="radius-km" className="shrink-0 text-sm font-medium text-slate-700">
+        Radio: {label}
       </label>
+      <span className="hidden shrink-0 text-xs text-slate-500 sm:inline">500 m</span>
       <input
         id="radius-km"
         type="range"
         min={MIN_RADIUS_KM}
         max={MAX_RADIUS_KM}
-        step={1}
+        step={RADIUS_STEP_KM}
         value={km}
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         aria-valuemin={MIN_RADIUS_KM}
         aria-valuemax={MAX_RADIUS_KM}
         aria-valuenow={km}
-        aria-valuetext={`${km} kilómetros`}
-        className="h-11 w-full accent-[var(--brand)]"
+        aria-valuetext={label}
+        className="h-11 min-w-0 flex-1 accent-[var(--brand)]"
       />
-      <div className="flex justify-between text-xs text-slate-500">
-        <span>{MIN_RADIUS_KM} km</span>
-        <span>{MAX_RADIUS_KM} km</span>
-      </div>
+      <span className="shrink-0 text-xs text-slate-500">10 km</span>
     </div>
   );
 }

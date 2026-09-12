@@ -1,13 +1,16 @@
-import { SystemModule, AuditAction } from "@prisma/client";
+import { AuditAction, ProductScope, SystemModule } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
+import { assertRateLimit } from "@/lib/rate-limit/token-bucket";
 import {
-  assertValidImage,
-  uploadImageBuffer,
-  extractCloudinaryPublicId,
-  destroyCloudinaryAsset,
-  CloudinaryConfigError,
-} from "@/lib/storage/cloudinary";
+  MAX_IMAGE_BYTES,
+  detectImageMime,
+  writeImageBuffer,
+  unlinkMediaUrl,
+  DiskStorageError,
+  type StoredImageMime,
+} from "@/lib/storage/local-disk";
+import { ProviderNotFoundError } from "@/lib/services/provider.service";
 
 export class MediaValidationError extends Error {
   constructor(
@@ -26,11 +29,38 @@ export class MediaNotFoundError extends Error {
   }
 }
 
-export { CloudinaryConfigError };
+export class MediaForbiddenError extends Error {
+  constructor(message = "Acceso denegado") {
+    super(message);
+    this.name = "MediaForbiddenError";
+  }
+}
+
+export { DiskStorageError };
 
 async function fileToBuffer(file: File): Promise<Buffer> {
   const ab = await file.arrayBuffer();
   return Buffer.from(ab);
+}
+
+async function validateAndStore(file: File): Promise<{
+  url: string;
+  bytes: number;
+  mime: StoredImageMime;
+}> {
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new MediaValidationError("file", "El archivo supera el límite de 20MB");
+  }
+  const buffer = await fileToBuffer(file);
+  const mime = detectImageMime(buffer);
+  if (!mime) {
+    throw new MediaValidationError(
+      "file",
+      "Formato no permitido. Usa JPEG, PNG o WebP"
+    );
+  }
+  const stored = await writeImageBuffer({ buffer, mime });
+  return { url: stored.url, bytes: stored.bytes, mime };
 }
 
 export async function uploadProviderMedia(params: {
@@ -39,11 +69,6 @@ export async function uploadProviderMedia(params: {
   file: File;
   ipAddress?: string;
 }): Promise<{ url: string; field: "logoUrl" | "coverUrl" }> {
-  const check = assertValidImage({ type: params.file.type, size: params.file.size });
-  if (!check.ok) {
-    throw new MediaValidationError(check.field, check.message);
-  }
-
   const provider = await prisma.provider.findUnique({
     where: { userId: params.userId },
   });
@@ -51,26 +76,23 @@ export async function uploadProviderMedia(params: {
     throw new MediaNotFoundError("Perfil de proveedor no encontrado");
   }
 
+  assertRateLimit(`media:${provider.id}`, 20, 10 * 60 * 1000);
+
   const column = params.field === "logo" ? "logoUrl" : "coverUrl";
   const previousUrl = provider[column];
-  const buffer = await fileToBuffer(params.file);
+  const stored = await validateAndStore(params.file);
 
-  const uploaded = await uploadImageBuffer({
-    buffer,
-    folder: `laborregamarket/providers/${provider.id}`,
-    publicId: params.field,
-    mimeType: params.file.type,
-  });
-
-  await prisma.provider.update({
-    where: { id: provider.id },
-    data: { [column]: uploaded.url },
-  });
-
-  const prevPublicId = extractCloudinaryPublicId(previousUrl);
-  if (prevPublicId && prevPublicId !== uploaded.publicId) {
-    await destroyCloudinaryAsset(prevPublicId);
+  try {
+    await prisma.provider.update({
+      where: { id: provider.id },
+      data: { [column]: stored.url },
+    });
+  } catch (err) {
+    await unlinkMediaUrl(stored.url);
+    throw err;
   }
+
+  await unlinkMediaUrl(previousUrl);
 
   await writeAuditLog({
     module: SystemModule.PROVIDERS,
@@ -80,14 +102,14 @@ export async function uploadProviderMedia(params: {
     ipAddress: params.ipAddress,
     details: {
       field: column,
-      url: uploaded.url,
-      bytes: uploaded.bytes,
-      mimeType: params.file.type,
+      url: stored.url,
+      bytes: stored.bytes,
+      mimeType: stored.mime,
       replacedPrevious: Boolean(previousUrl),
     },
   });
 
-  return { url: uploaded.url, field: column };
+  return { url: stored.url, field: column };
 }
 
 export async function uploadProductImage(params: {
@@ -96,37 +118,35 @@ export async function uploadProductImage(params: {
   file: File;
   ipAddress?: string;
 }): Promise<{ url: string; field: "imageUrl" }> {
-  const check = assertValidImage({ type: params.file.type, size: params.file.size });
-  if (!check.ok) {
-    throw new MediaValidationError(check.field, check.message);
-  }
-
   const product = await prisma.product.findUnique({
     where: { id: params.productId },
   });
   if (!product) {
     throw new MediaNotFoundError("Producto no encontrado");
   }
+  if (product.scope !== ProductScope.GLOBAL) {
+    throw new MediaValidationError(
+      "id",
+      "Usa la ruta de instancia del dueño para productos locales"
+    );
+  }
+
+  assertRateLimit(`media-admin:${params.adminUserId}`, 20, 10 * 60 * 1000);
 
   const previousUrl = product.imageUrl;
-  const buffer = await fileToBuffer(params.file);
+  const stored = await validateAndStore(params.file);
 
-  const uploaded = await uploadImageBuffer({
-    buffer,
-    folder: `laborregamarket/products/${product.id}`,
-    publicId: "image",
-    mimeType: params.file.type,
-  });
-
-  await prisma.product.update({
-    where: { id: product.id },
-    data: { imageUrl: uploaded.url },
-  });
-
-  const prevPublicId = extractCloudinaryPublicId(previousUrl);
-  if (prevPublicId && prevPublicId !== uploaded.publicId) {
-    await destroyCloudinaryAsset(prevPublicId);
+  try {
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { imageUrl: stored.url },
+    });
+  } catch (err) {
+    await unlinkMediaUrl(stored.url);
+    throw err;
   }
+
+  await unlinkMediaUrl(previousUrl);
 
   await writeAuditLog({
     module: SystemModule.PRODUCTS,
@@ -136,12 +156,79 @@ export async function uploadProductImage(params: {
     ipAddress: params.ipAddress,
     details: {
       field: "imageUrl",
-      url: uploaded.url,
-      bytes: uploaded.bytes,
-      mimeType: params.file.type,
+      url: stored.url,
+      bytes: stored.bytes,
+      mimeType: stored.mime,
       replacedPrevious: Boolean(previousUrl),
     },
   });
 
-  return { url: uploaded.url, field: "imageUrl" };
+  return { url: stored.url, field: "imageUrl" };
+}
+
+export async function uploadProviderProductImage(params: {
+  userId: string;
+  providerProductId: string;
+  file: File;
+  ipAddress?: string;
+}): Promise<{ url: string; field: "imageUrl" }> {
+  const provider = await prisma.provider.findUnique({
+    where: { userId: params.userId },
+  });
+  if (!provider) {
+    throw new MediaNotFoundError("Perfil de proveedor no encontrado");
+  }
+
+  const row = await prisma.providerProduct.findUnique({
+    where: { id: params.providerProductId },
+    include: { product: true },
+  });
+  if (!row) {
+    throw new MediaNotFoundError("Producto no encontrado");
+  }
+  if (row.providerId !== provider.id) {
+    throw new MediaForbiddenError();
+  }
+
+  assertRateLimit(`media:${provider.id}`, 20, 10 * 60 * 1000);
+
+  const previousUrl = row.imageUrl;
+  const stored = await validateAndStore(params.file);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.providerProduct.update({
+        where: { id: row.id },
+        data: { imageUrl: stored.url },
+      });
+      if (row.product.scope === ProductScope.LOCAL) {
+        await tx.product.update({
+          where: { id: row.productId },
+          data: { imageUrl: stored.url },
+        });
+      }
+    });
+  } catch (err) {
+    await unlinkMediaUrl(stored.url);
+    throw err;
+  }
+
+  await unlinkMediaUrl(previousUrl);
+
+  await writeAuditLog({
+    module: SystemModule.PRODUCTS,
+    action: AuditAction.MEDIA_UPLOAD,
+    entityId: row.id,
+    userId: params.userId,
+    ipAddress: params.ipAddress,
+    details: {
+      field: "imageUrl",
+      url: stored.url,
+      bytes: stored.bytes,
+      mimeType: stored.mime,
+      replacedPrevious: Boolean(previousUrl),
+    },
+  });
+
+  return { url: stored.url, field: "imageUrl" };
 }

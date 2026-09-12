@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getSession, requireRole, AuthError } from "@/lib/auth/session";
-import { ok, apiError } from "@/lib/api/response";
+import { ok, apiError, handleRouteError } from "@/lib/api/response";
 import {
   uploadProviderMedia,
   MediaValidationError,
   MediaNotFoundError,
-  CloudinaryConfigError,
+  DiskStorageError,
 } from "@/lib/services/media.service";
 
 const MEDIA_FIELDS = new Set(["logo", "cover"]);
@@ -55,9 +55,9 @@ export async function POST(request: NextRequest) {
     if (err instanceof MediaNotFoundError) {
       return apiError(err.message, 404);
     }
-    if (err instanceof CloudinaryConfigError) {
+    if (err instanceof DiskStorageError) {
       return apiError(err.message, 500);
     }
-    return apiError("Error interno", 500);
+    return handleRouteError(err);
   }
 }

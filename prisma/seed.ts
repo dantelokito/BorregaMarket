@@ -219,16 +219,19 @@ async function main() {
   ];
 
   const products = await Promise.all(
-    productsData.map((p) =>
-      prisma.product.upsert({
-        where: { slug: p.slug },
-        update: {},
-        create: {
+    productsData.map(async (p) => {
+      const existing = await prisma.product.findFirst({
+        where: { slug: p.slug, scope: "GLOBAL" },
+      });
+      if (existing) return existing;
+      return prisma.product.create({
+        data: {
           ...p,
+          scope: "GLOBAL",
           imageUrl: `https://images.unsplash.com/photo-1566385101042-1a0aa0c1269c?w=300&sig=${p.slug}`,
         },
-      })
-    )
+      });
+    })
   );
 
   // ─── Productos por proveedor con precios ───────────────────────────────────

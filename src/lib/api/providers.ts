@@ -1,3 +1,4 @@
+import { clampGeoRadiusKm, DEFAULT_RADIUS_KM } from "@/lib/validators/geo";
 import { apiGet, apiPost, buildQuery } from "./client";
 import type {
   CreateProviderInput,
@@ -15,6 +16,8 @@ export interface ProvidersQuery {
   q?: string;
   category?: ProviderCategory;
   verified?: boolean;
+  offersWholesale?: boolean;
+  offersDelivery?: boolean;
   page?: number;
   limit?: number;
   lat?: number;
@@ -22,9 +25,10 @@ export interface ProvidersQuery {
   radiusKm?: number;
 }
 
-export function clampRadiusKm(value: number | undefined, fallback = 10): number {
+/** CO-F8-001: clamp 0.5–10 sin Math.round (0.7 se queda 0.7; 22→10; 0→0.5). */
+export function clampRadiusKm(value: number | undefined, fallback = DEFAULT_RADIUS_KM): number {
   if (value == null || Number.isNaN(value)) return fallback;
-  return Math.min(25, Math.max(1, Math.round(value)));
+  return clampGeoRadiusKm(value);
 }
 
 /** Query string for GET /api/providers (API-GEO-01). Geo only if both lat and lng. */
@@ -35,6 +39,8 @@ export function buildProvidersQuery(query: ProvidersQuery = {}): string {
     q: query.q && query.q.trim().length >= 2 ? query.q.trim() : undefined,
     category: query.category,
     verified: query.verified ? "true" : undefined,
+    offersWholesale: query.offersWholesale === true ? "true" : undefined,
+    offersDelivery: query.offersDelivery === true ? "true" : undefined,
     page: query.page,
     limit: query.limit,
     lat: hasGeo ? query.lat : undefined,

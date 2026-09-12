@@ -58,6 +58,13 @@ describe("getProviderDetail", () => {
       googlePlaceId: null,
       googleMapsUrl: null,
       googleReviewsEnabled: false,
+      whatsappEnabled: false,
+      acceptsCardAtStore: false,
+      offersWholesale: false,
+      offersRetail: true,
+      openingHours: null,
+      verifiedAt: null,
+      reviews: [],
       providerProducts: [
         {
           id: "pp1",
@@ -87,6 +94,9 @@ describe("getProviderDetail", () => {
     );
     expect(detail.products).toHaveLength(1);
     expect(detail.products[0].isAvailable).toBe(true);
+    expect(detail.hoursPublished).toBe(false);
+    expect(detail.isOpenNow).toBeNull();
+    expect(detail.reviewsPreview).toEqual([]);
   });
 });
 

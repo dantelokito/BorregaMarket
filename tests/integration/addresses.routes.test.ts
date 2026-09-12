@@ -7,6 +7,7 @@ const listAddresses = vi.fn();
 const createAddress = vi.fn();
 const updateAddress = vi.fn();
 const deleteAddress = vi.fn();
+const markLastUsed = vi.fn();
 
 vi.mock("@/lib/auth/session", async () => {
   const actual = await vi.importActual<typeof import("@/lib/auth/session")>(
@@ -28,11 +29,13 @@ vi.mock("@/lib/services/address.service", async () => {
     createAddress: (...args: unknown[]) => createAddress(...args),
     updateAddress: (...args: unknown[]) => updateAddress(...args),
     deleteAddress: (...args: unknown[]) => deleteAddress(...args),
+    markLastUsed: (...args: unknown[]) => markLastUsed(...args),
   };
 });
 
 import { GET, POST } from "@/app/api/users/me/addresses/route";
 import { PATCH, DELETE } from "@/app/api/users/me/addresses/[id]/route";
+import { POST as usePost } from "@/app/api/users/me/addresses/[id]/use/route";
 import { AddressNotFoundError } from "@/lib/services/address.service";
 
 function jsonRequest(
@@ -83,6 +86,7 @@ describe("addresses routes", () => {
       lng: -100.3089,
       isFavorite: true,
       isDefault: true,
+      lastUsedAt: null,
       createdAt: "2026-08-14T18:00:00.000Z",
     });
     const res = await POST(
@@ -101,12 +105,23 @@ describe("addresses routes", () => {
     expect(res.status).toBe(201);
   });
 
-  it("returns 400 for coords outside Monterrey", async () => {
+  it("creates a CDMX address with 201", async () => {
     getSession.mockReturnValue({
       sub: "u1",
       role: UserRole.CLIENT,
       email: "c@test.com",
       name: "María",
+    });
+    createAddress.mockResolvedValue({
+      id: "addr-cdmx",
+      label: "CDMX",
+      formattedAddress: "Zócalo",
+      lat: 19.43,
+      lng: -99.13,
+      isFavorite: true,
+      isDefault: false,
+      lastUsedAt: null,
+      createdAt: "2026-08-24T18:00:00.000Z",
     });
     const res = await POST(
       jsonRequest("/api/users/me/addresses", {
@@ -119,9 +134,85 @@ describe("addresses routes", () => {
         },
       })
     );
+    expect(res.status).toBe(201);
+    expect(createAddress).toHaveBeenCalled();
+  });
+
+  it("returns 400 for coords outside Mexico", async () => {
+    getSession.mockReturnValue({
+      sub: "u1",
+      role: UserRole.CLIENT,
+      email: "c@test.com",
+      name: "María",
+    });
+    const res = await POST(
+      jsonRequest("/api/users/me/addresses", {
+        method: "POST",
+        body: {
+          label: "Fuera",
+          formattedAddress: "North of MX",
+          lat: 33.0,
+          lng: -99.0,
+        },
+      })
+    );
     expect(res.status).toBe(400);
+    expect(createAddress).not.toHaveBeenCalled();
     const body = await res.json();
-    expect(body.details?.[0]?.message).toContain("Monterrey");
+    expect(body.details?.some((d: { field: string; message: string }) =>
+      (d.field === "lat" || d.field === "lng") && d.message.includes("México")
+    )).toBe(true);
+  });
+
+  it("PATCHes CDMX coords with 200", async () => {
+    getSession.mockReturnValue({
+      sub: "u1",
+      role: UserRole.CLIENT,
+      email: "c@test.com",
+      name: "María",
+    });
+    updateAddress.mockResolvedValue({
+      id: "addr1",
+      label: "Casa",
+      formattedAddress: "Zócalo",
+      lat: 19.43,
+      lng: -99.13,
+      isFavorite: true,
+      isDefault: true,
+      lastUsedAt: null,
+      createdAt: "2026-08-24T18:00:00.000Z",
+    });
+    const res = await PATCH(
+      jsonRequest("/api/users/me/addresses/addr1", {
+        method: "PATCH",
+        body: { lat: 19.43, lng: -99.13, formattedAddress: "Zócalo" },
+      }),
+      { params: Promise.resolve({ id: "addr1" }) }
+    );
+    expect(res.status).toBe(200);
+    expect(updateAddress).toHaveBeenCalled();
+  });
+
+  it("returns 400 when PATCH coords are outside Mexico", async () => {
+    getSession.mockReturnValue({
+      sub: "u1",
+      role: UserRole.CLIENT,
+      email: "c@test.com",
+      name: "María",
+    });
+    const res = await PATCH(
+      jsonRequest("/api/users/me/addresses/addr1", {
+        method: "PATCH",
+        body: { lat: 33.0, lng: -99.0 },
+      }),
+      { params: Promise.resolve({ id: "addr1" }) }
+    );
+    expect(res.status).toBe(400);
+    expect(updateAddress).not.toHaveBeenCalled();
+    const body = await res.json();
+    expect(body.details?.some((d: { field: string; message: string }) =>
+      (d.field === "lat" || d.field === "lng") && d.message.includes("México")
+    )).toBe(true);
   });
 
   it("hides cross-user delete as 404", async () => {
@@ -138,5 +229,47 @@ describe("addresses routes", () => {
     );
     expect(res.status).toBe(404);
     expect(updateAddress).not.toHaveBeenCalled();
+  });
+
+  it("POST /use returns 401 without session (DEV-P2-011)", async () => {
+    getSession.mockReturnValue(null);
+    const res = await usePost(jsonRequest("/api/users/me/addresses/addr1/use", { method: "POST" }), {
+      params: Promise.resolve({ id: "addr1" }),
+    });
+    expect(res.status).toBe(401);
+    expect(markLastUsed).not.toHaveBeenCalled();
+  });
+
+  it("POST /use returns 403 for PROVIDER (DEV-P2-011)", async () => {
+    getSession.mockReturnValue({
+      sub: "p1",
+      role: UserRole.PROVIDER,
+      email: "p@test.com",
+      name: "Carlos",
+    });
+    const res = await usePost(jsonRequest("/api/users/me/addresses/addr1/use", { method: "POST" }), {
+      params: Promise.resolve({ id: "addr1" }),
+    });
+    expect(res.status).toBe(403);
+    expect(markLastUsed).not.toHaveBeenCalled();
+  });
+
+  it("POST /use stamps lastUsedAt for CLIENT", async () => {
+    getSession.mockReturnValue({
+      sub: "u1",
+      role: UserRole.CLIENT,
+      email: "c@test.com",
+      name: "María",
+    });
+    markLastUsed.mockResolvedValue({
+      id: "addr1",
+      lastUsedAt: "2026-08-18T18:00:00.000Z",
+    });
+    const res = await usePost(jsonRequest("/api/users/me/addresses/addr1/use", { method: "POST" }), {
+      params: Promise.resolve({ id: "addr1" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.lastUsedAt).toBe("2026-08-18T18:00:00.000Z");
   });
 });

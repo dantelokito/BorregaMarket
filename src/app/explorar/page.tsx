@@ -3,7 +3,7 @@ import { ExplorePageClient } from "./ExplorePageClient";
 
 export default function ExplorePage() {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-dvh flex-col">
       <HeaderWrapper />
       <ExplorePageClient />
     </div>

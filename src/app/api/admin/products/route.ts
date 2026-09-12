@@ -1,0 +1,66 @@
+import { NextRequest } from "next/server";
+import { z } from "zod";
+import { SystemModule } from "@prisma/client";
+import { AuthError } from "@/lib/auth/session";
+import { requireAdminModule } from "@/lib/auth/require-admin-module";
+import { ok, paginated, apiError, fromZodError, handleRouteError } from "@/lib/api/response";
+import {
+  adminProductListQuerySchema,
+  createAdminProductSchema,
+} from "@/lib/validators/catalog-f10";
+import {
+  createAdminProduct,
+  listAdminProducts,
+  ProductConflictError,
+} from "@/lib/services/admin-product.service";
+
+export async function GET(request: NextRequest) {
+  try {
+    await requireAdminModule(request, SystemModule.PRODUCTS, "view");
+    const searchParams = new URL(request.url).searchParams;
+    const query = adminProductListQuerySchema.parse({
+      q: searchParams.get("q") ?? undefined,
+      isActive: searchParams.get("isActive") ?? undefined,
+    });
+    const result = await listAdminProducts({
+      searchParams,
+      q: query.q,
+      isActive: query.isActive,
+    });
+    return paginated(result.data, result.meta);
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return apiError(err.message, err.status);
+    }
+    if (err instanceof z.ZodError) {
+      return apiError("Validation failed", 400, fromZodError(err));
+    }
+    return handleRouteError(err);
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await requireAdminModule(request, SystemModule.PRODUCTS, "create");
+    const body = createAdminProductSchema.parse(await request.json());
+    const created = await createAdminProduct({
+      input: body,
+      adminUserId: session.sub,
+      ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
+    });
+    return ok(created, 201);
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return apiError(err.message, err.status);
+    }
+    if (err instanceof ProductConflictError) {
+      return apiError(err.message, 409, [
+        { field: "slug", message: "Slug duplicado en el catálogo global" },
+      ]);
+    }
+    if (err instanceof z.ZodError) {
+      return apiError("Validation failed", 400, fromZodError(err));
+    }
+    return handleRouteError(err);
+  }
+}

@@ -4,12 +4,10 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { FavoriteAddressSelect } from "./FavoriteAddressSelect";
 import type { UserAddress } from "@/lib/api/types";
-import { MONTERREY_CENTER } from "@/lib/maps/constants";
+import { SAN_NICOLAS_CENTER } from "@/lib/maps/constants";
 
 interface CompactAddressBarProps {
-  hasPin: boolean;
   pinLabel?: string;
-  radiusKm: number;
   geoDenied: boolean;
   onSearchAddress: (query: string) => Promise<void>;
   addresses: UserAddress[];
@@ -18,12 +16,12 @@ interface CompactAddressBarProps {
   onSaveAddress: () => void;
   canSave: boolean;
   guest: boolean;
+  /** Conteo Must "{N} fruterías a {R} km" y avisos de búsqueda. */
+  children?: React.ReactNode;
 }
 
 export function CompactAddressBar({
-  hasPin,
   pinLabel,
-  radiusKm,
   geoDenied,
   onSearchAddress,
   addresses,
@@ -32,6 +30,7 @@ export function CompactAddressBar({
   onSaveAddress,
   canSave,
   guest,
+  children,
 }: CompactAddressBarProps) {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -56,8 +55,8 @@ export function CompactAddressBar({
   }
 
   return (
-    <section className="space-y-3 border-b border-gray-100 bg-white px-6 py-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+    <section className="space-y-2 border-b border-gray-100 bg-white px-4 py-2 sm:px-6 sm:py-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <form onSubmit={submitSearch} className="flex min-w-0 flex-1 gap-2">
           <label htmlFor="geocode-query" className="sr-only">
             Buscar dirección
@@ -67,28 +66,28 @@ export function CompactAddressBar({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar dirección"
-            className="h-11 min-w-0 flex-1 rounded-lg border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
+            className="h-[var(--explore-addressbar-controls-h)] min-w-0 flex-1 rounded-lg border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
           />
           <button
             type="submit"
             disabled={searching}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-[var(--brand)] text-white focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
+            className="inline-flex h-[var(--explore-addressbar-controls-h)] w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--brand)] text-white focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
             aria-label="Buscar dirección"
           >
             <Search size={16} />
           </button>
         </form>
 
-        <div className="lg:w-[280px]">
-          <FavoriteAddressSelect
-            addresses={addresses}
-            selectedId={selectedAddressId}
-            onSelect={onSelectAddress}
-            onSave={onSaveAddress}
-            canSave={canSave}
-            guest={guest}
-          />
-        </div>
+        <FavoriteAddressSelect
+          inline
+          className="shrink-0"
+          addresses={addresses}
+          selectedId={selectedAddressId}
+          onSelect={onSelectAddress}
+          onSave={onSaveAddress}
+          canSave={canSave}
+          guest={guest}
+        />
       </div>
 
       {searchError && (
@@ -98,16 +97,14 @@ export function CompactAddressBar({
       )}
       {geoDenied && (
         <p className="text-sm text-slate-600">
-          Busca una dirección o usa una favorita. El mapa se centra en Monterrey (
-          {MONTERREY_CENTER.lat.toFixed(2)}, {MONTERREY_CENTER.lng.toFixed(2)}).
+          Busca una dirección o usa una favorita. El mapa se centra en San Nicolás (
+          {SAN_NICOLAS_CENTER.lat.toFixed(2)}, {SAN_NICOLAS_CENTER.lng.toFixed(2)}).
         </p>
       )}
 
-      <p className="text-sm text-slate-600">
-        {hasPin
-          ? `Fruterías a ${radiusKm} km${pinLabel ? ` de ${pinLabel}` : ""}`
-          : "Activa ubicación o busca una dirección para filtrar por radio"}
-      </p>
+      {pinLabel && <p className="text-sm text-slate-600">Centro: {pinLabel}</p>}
+
+      {children}
     </section>
   );
 }

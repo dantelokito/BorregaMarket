@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { UserRole } from "@prisma/client";
-import { getSession, requireRole, AuthError } from "@/lib/auth/session";
+import { SystemModule } from "@prisma/client";
+import { AuthError } from "@/lib/auth/session";
+import { requireAdminModule } from "@/lib/auth/require-admin-module";
 import { ok, apiError, fromZodError, handleRouteError } from "@/lib/api/response";
 import { patchAdminProviderSchema } from "@/lib/validators/provider-settings";
 import {
@@ -15,7 +16,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = requireRole(getSession(request), UserRole.ADMIN);
+    const session = await requireAdminModule(request, SystemModule.PROVIDERS, "edit");
     const { id } = await params;
     const body = patchAdminProviderSchema.parse(await request.json());
 

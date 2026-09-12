@@ -39,7 +39,7 @@ export function ReviewList({ providerId, googleMapsUrl, googleEnabled }: ReviewL
   }, [load]);
 
   return (
-    <section className="mt-10" aria-labelledby="reviews-heading">
+    <section id="resenas" className="mt-10 scroll-mt-24" aria-labelledby="reviews-heading">
       <h2 id="reviews-heading" className="mb-4 text-lg font-semibold">
         Reseñas
       </h2>
