@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { UserRole, verifyToken, TOKEN_COOKIE, type JwtPayload } from "./token";
 
+export type { JwtPayload };
+
 export function extractToken(request: NextRequest): string | null {
   const authHeader = request.headers.get("authorization");
   if (authHeader?.startsWith("Bearer ")) {
