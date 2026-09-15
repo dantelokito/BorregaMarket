@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { UserRole } from "@prisma/client";
-import { getSession, requireRole, AuthError } from "@/lib/auth/session";
+import { AuthError } from "@/lib/auth/session";
+import { applyActiveProviderCookie, requireActiveProvider } from "@/lib/auth/active-provider";
 import { ok, apiError, fromZodError, handleRouteError } from "@/lib/api/response";
 import { patchLocalProductSchema } from "@/lib/validators/catalog-f10";
 import {
@@ -17,16 +17,17 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = requireRole(getSession(request), UserRole.PROVIDER);
+    const ctx = await requireActiveProvider(request);
     const { id } = await params;
     const body = patchLocalProductSchema.parse(await request.json());
     const updated = await updateLocalProduct({
-      userId: session.sub,
+      userId: ctx.session.sub,
+      providerId: ctx.provider.id,
       providerProductId: id,
       input: body,
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
-    return ok(updated);
+    return applyActiveProviderCookie(ok(updated), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) {
       return apiError(err.message, err.status);

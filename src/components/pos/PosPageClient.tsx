@@ -22,6 +22,7 @@ import { usePosScale } from "./usePosScale";
 import { formatCurrency, formatQty, lineAmount, parseDecimalInput, qtyToApiString } from "@/lib/format";
 import { PAYMENT_METHOD_LABEL, UNIT_LABEL, shortOrderId, toUnitOfMeasure } from "@/lib/orders/labels";
 import { gramsToQuantity, isWeighableUnit } from "@/lib/pos/scale";
+import { ActiveStoreEyebrow } from "@/components/provider/ActiveStoreEyebrow";
 
 interface TicketLine {
   key: string;
@@ -280,6 +281,7 @@ export function PosPageClient() {
   return (
     <div className="mx-auto flex max-w-[1600px] flex-col lg:h-[calc(100vh-9rem)] lg:flex-row">
       <section className="flex-1 overflow-y-auto p-4 lg:w-[58%] lg:border-r">
+        <ActiveStoreEyebrow />
         <div className="mb-4 flex gap-2">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />

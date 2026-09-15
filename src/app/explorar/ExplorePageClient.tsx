@@ -34,7 +34,7 @@ import {
   readExplorePin,
   writeExplorePin,
 } from "@/lib/maps/constants";
-import { resolveExploreCenter } from "@/lib/maps/explore-center";
+import { exploreChipFallbackLabel, resolveExploreCenter } from "@/lib/maps/explore-center";
 import { useFilterBarCollapse } from "@/hooks/useFilterBarCollapse";
 
 const EXPLORE_PAGE_SIZE = 20;
@@ -249,7 +249,9 @@ function ExploreContent() {
       setAddresses(list);
       setGuest(isGuest);
 
-      const params = searchParamsRef.current;
+      const params = new URLSearchParams(
+        typeof window !== "undefined" ? window.location.search : searchParamsRef.current.toString()
+      );
       const urlLat = parseCoord(params.get("lat"));
       const urlLng = parseCoord(params.get("lng"));
       const urlInMexico = urlLat != null && urlLng != null && isInMexico(urlLat, urlLng);
@@ -274,10 +276,17 @@ function ExploreContent() {
       });
 
       if (center.label) setPinLabel(center.label);
-      if (center.addressId) setSelectedAddressId(center.addressId);
-      else if (list.length > 0) setSelectedAddressId(list[0].id);
+      if (center.source === "url") {
+        setSelectedAddressId(null);
+        if (!center.label) setPinLabel(exploreChipFallbackLabel(center.lat, center.lng));
+      } else if (center.addressId) {
+        setSelectedAddressId(center.addressId);
+      } else if (list.length > 0) {
+        setSelectedAddressId(list[0].id);
+      }
 
-      if (center.source !== "url") {
+      const alreadyHasUrlPin = urlLat != null && urlLng != null;
+      if (center.source !== "url" && !alreadyHasUrlPin) {
         const next = new URLSearchParams(params.toString());
         next.set("lat", String(center.lat));
         next.set("lng", String(center.lng));
@@ -504,7 +513,10 @@ function ExploreContent() {
   }
 
   const selected = addresses.find((a) => a.id === selectedAddressId);
-  const chipLabel = selected?.label || pinLabel || "San Nicolás";
+  const chipLabel =
+    selected?.label ||
+    pinLabel ||
+    (hasPin ? exploreChipFallbackLabel(latParam, lngParam) : "San Nicolás");
 
   const hasFilters = Boolean(q || verified || categoryParam || offersWholesale || offersDelivery);
   const isEmpty = !loading && !error && total === 0;

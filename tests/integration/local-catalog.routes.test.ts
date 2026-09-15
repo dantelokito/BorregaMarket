@@ -8,6 +8,11 @@ const updateLocalProduct = vi.fn();
 const listProviderSections = vi.fn();
 const deleteProviderSection = vi.fn();
 
+vi.mock("@/lib/providers/owned-provider", () => ({
+  listOwnedProviders: vi.fn().mockResolvedValue([{ id: "prov1", userId: "u2" }]),
+  findOwnedProvider: vi.fn().mockResolvedValue({ id: "prov1", userId: "u2" }),
+}));
+
 vi.mock("@/lib/auth/session", async () => {
   const actual = await vi.importActual<typeof import("@/lib/auth/session")>(
     "@/lib/auth/session"

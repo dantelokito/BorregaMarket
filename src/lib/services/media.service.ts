@@ -11,6 +11,7 @@ import {
   type StoredImageMime,
 } from "@/lib/storage/local-disk";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+import { findOwnedProvider } from "@/lib/providers/owned-provider";
 
 export class MediaValidationError extends Error {
   constructor(
@@ -65,13 +66,12 @@ async function validateAndStore(file: File): Promise<{
 
 export async function uploadProviderMedia(params: {
   userId: string;
+  providerId?: string;
   field: "logo" | "cover";
   file: File;
   ipAddress?: string;
 }): Promise<{ url: string; field: "logoUrl" | "coverUrl" }> {
-  const provider = await prisma.provider.findUnique({
-    where: { userId: params.userId },
-  });
+  const provider = await findOwnedProvider(params.userId, params.providerId);
   if (!provider) {
     throw new MediaNotFoundError("Perfil de proveedor no encontrado");
   }
@@ -168,13 +168,12 @@ export async function uploadProductImage(params: {
 
 export async function uploadProviderProductImage(params: {
   userId: string;
+  providerId?: string;
   providerProductId: string;
   file: File;
   ipAddress?: string;
 }): Promise<{ url: string; field: "imageUrl" }> {
-  const provider = await prisma.provider.findUnique({
-    where: { userId: params.userId },
-  });
+  const provider = await findOwnedProvider(params.userId, params.providerId);
   if (!provider) {
     throw new MediaNotFoundError("Perfil de proveedor no encontrado");
   }

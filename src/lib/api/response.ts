@@ -34,6 +34,16 @@ export function apiError(
   );
 }
 
+export function apiCodedError(code: string, message: string, status: number) {
+  return NextResponse.json(
+    {
+      error: { code, message },
+      timestamp: new Date().toISOString(),
+    },
+    { status }
+  );
+}
+
 export function fromZodError(error: ZodError): FieldError[] {
   return error.errors.map((e) => ({
     field: e.path.join(".") || "body",

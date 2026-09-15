@@ -19,6 +19,7 @@ import { formatCurrency, formatQty } from "@/lib/format";
 import { ORDER_STATUS_LABEL, UNIT_LABEL, shortOrderId } from "@/lib/orders/labels";
 import { telHref } from "@/lib/phone";
 import Link from "next/link";
+import { ActiveStoreEyebrow } from "@/components/provider/ActiveStoreEyebrow";
 
 const TABS = [
   { id: "active", label: "Activas" },
@@ -131,6 +132,7 @@ export function OrdenesPageClient() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
+      <ActiveStoreEyebrow />
       <h1 className="mb-4 text-2xl font-bold">Órdenes</h1>
       <div role="tablist" aria-label="Filtro de órdenes" className="mb-6 flex gap-1 border-b" onKeyDown={onTabKey}>
         {TABS.map((t) => (

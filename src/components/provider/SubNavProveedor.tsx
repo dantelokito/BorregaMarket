@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { listProviderOrders } from "@/lib/api/provider-ops";
+import { useProviderScope } from "@/hooks/useProviderScope";
 
 const TABS = [
   { href: "/proveedor", label: "Catálogo" },
@@ -14,6 +15,7 @@ const TABS = [
 
 export function SubNavProveedor() {
   const pathname = usePathname();
+  const { showGlobalReports } = useProviderScope();
   const [activeCount, setActiveCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -54,6 +56,21 @@ export function SubNavProveedor() {
             </li>
           );
         })}
+        {showGlobalReports && (
+          <li>
+            <Link
+              href="/proveedor/reportes-generales"
+              aria-current={pathname.startsWith("/proveedor/reportes-generales") ? "page" : undefined}
+              className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${
+                pathname.startsWith("/proveedor/reportes-generales")
+                  ? "border-[var(--brand)] text-[var(--brand)]"
+                  : "border-transparent text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Reportes generales
+            </Link>
+          </li>
+        )}
       </ul>
     </nav>
   );

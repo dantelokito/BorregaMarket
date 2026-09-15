@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
-import { UserRole } from "@prisma/client";
-import { getSession, requireRole, AuthError } from "@/lib/auth/session";
+import { AuthError } from "@/lib/auth/session";
+import { applyActiveProviderCookie, requireActiveProvider } from "@/lib/auth/active-provider";
 import { ok, apiError, handleRouteError } from "@/lib/api/response";
 import {
   uploadProviderMedia,
@@ -14,7 +14,7 @@ const MEDIA_FIELDS = new Set(["logo", "cover"]);
 /** PROVIDER: upload logo o cover (multipart) */
 export async function POST(request: NextRequest) {
   try {
-    const session = requireRole(getSession(request), UserRole.PROVIDER);
+    const ctx = await requireActiveProvider(request);
 
     const form = await request.formData();
     const file = form.get("file");
@@ -36,13 +36,14 @@ export async function POST(request: NextRequest) {
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined;
 
     const result = await uploadProviderMedia({
-      userId: session.sub,
+      userId: ctx.session.sub,
+      providerId: ctx.provider.id,
       field: fieldRaw as "logo" | "cover",
       file,
       ipAddress: ip,
     });
 
-    return ok(result);
+    return applyActiveProviderCookie(ok(result), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) {
       return apiError(err.message, err.status);

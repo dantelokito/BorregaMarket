@@ -4,6 +4,7 @@ import { getSession, requireRole, AuthError } from "@/lib/auth/session";
 import { ok, paginated, apiError, handleRouteError } from "@/lib/api/response";
 import { parsePaginationParams } from "@/lib/services/pagination";
 import { geoListQuerySchema } from "@/lib/validators/geo";
+import { applyActiveProviderCookie } from "@/lib/auth/active-provider";
 import {
   createProvider,
   createProviderSchema,
@@ -117,9 +118,10 @@ export async function POST(request: NextRequest) {
       request.headers.get("x-forwarded-for") ?? undefined
     );
 
-    return ok(
+    const response = ok(
       {
         id: provider.id,
+        userId: provider.userId,
         businessName: provider.businessName,
         address: provider.address,
         city: provider.city,
@@ -128,9 +130,11 @@ export async function POST(request: NextRequest) {
         phone: provider.phone,
         isVerified: provider.isVerified,
         isActive: provider.isActive,
+        activeProviderId: provider.id,
       },
       201
     );
+    return applyActiveProviderCookie(response, provider.id);
   } catch (err) {
     if (err instanceof AuthError) {
       return apiError(err.message, err.status);

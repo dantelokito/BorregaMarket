@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { UserRole } from "@prisma/client";
-import { getSession, requireRole, AuthError } from "@/lib/auth/session";
+import { AuthError } from "@/lib/auth/session";
+import { applyActiveProviderCookie, requireActiveProvider } from "@/lib/auth/active-provider";
 import { ok, apiError, fromZodError, handleRouteError } from "@/lib/api/response";
 import {
   getProviderCatalog,
@@ -25,9 +25,9 @@ const toggleSchema = z.object({
 /** Proveedor: catálogo global con estado ProviderProduct */
 export async function GET(request: NextRequest) {
   try {
-    const session = requireRole(getSession(request), UserRole.PROVIDER);
-    const catalog = await getProviderCatalog(session.sub);
-    return ok(catalog);
+    const ctx = await requireActiveProvider(request);
+    const catalog = await getProviderCatalog(ctx.session.sub, ctx.provider.id);
+    return applyActiveProviderCookie(ok(catalog), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) {
       return apiError(err.message, err.status);
@@ -41,16 +41,17 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = requireRole(getSession(request), UserRole.PROVIDER);
+    const ctx = await requireActiveProvider(request);
     const body = toggleSchema.parse(await request.json());
 
     const providerProduct = await upsertProviderProduct(
-      session.sub,
+      ctx.session.sub,
       body,
-      request.headers.get("x-forwarded-for") ?? undefined
+      request.headers.get("x-forwarded-for") ?? undefined,
+      ctx.provider.id
     );
 
-    return ok({ providerProduct });
+    return applyActiveProviderCookie(ok({ providerProduct }), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) {
       return apiError(err.message, err.status);

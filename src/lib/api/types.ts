@@ -21,15 +21,90 @@ export interface AuthUser {
 }
 
 export interface SessionBrand {
-  primaryColor: string;
-  secondaryColor: string;
+  primaryColor: string | null;
+  secondaryColor: string | null;
   source: "provider";
+}
+
+export interface SessionProviderSummary {
+  id: string;
+  businessName: string;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
 }
 
 export interface AuthSession {
   authenticated: boolean;
   role: "CLIENT" | "PROVIDER" | "ADMIN" | null;
   brand: SessionBrand | null;
+  providerCount?: number;
+  activeProviderId?: string | null;
+  providers?: SessionProviderSummary[];
+}
+
+export interface MineProvider {
+  id: string;
+  businessName: string;
+  address: string;
+  isActive: boolean;
+}
+
+export interface ProviderMine {
+  providerCount: number;
+  activeProviderId: string | null;
+  providers: MineProvider[];
+}
+
+export interface ActiveProviderResult {
+  activeProviderId: string;
+  businessName: string;
+  brand: SessionBrand | null;
+}
+
+export interface GlobalReportByProvider {
+  providerId: string;
+  businessName: string;
+  gmv: string;
+  orderCount: number;
+  avgTicket: string;
+}
+
+export interface GlobalProviderReport {
+  empty: boolean;
+  timezone: string;
+  generatedAt: string;
+  scope: "allOwnedProviders";
+  providerCount: number;
+  period: {
+    mode: "range" | "grain";
+    from: string;
+    to: string;
+    fromUtc?: string;
+    toUtc?: string;
+  };
+  kpis: {
+    gmv: string;
+    avgTicket: string;
+    orderCount: number;
+    bySource: {
+      MARKETPLACE: { gmv: string; orderCount: number };
+      POS: { gmv: string; orderCount: number };
+    };
+  };
+  byProvider: GlobalReportByProvider[];
+  series: { bucket: string; gmv: string; orderCount: number }[];
+  products: {
+    providerProductId: string;
+    providerId: string;
+    businessName: string;
+    name: string;
+    quantitySum: string;
+    salesTotal: string;
+    bySource: {
+      MARKETPLACE: { gmv: string; quantitySum: string };
+      POS: { gmv: string; quantitySum: string };
+    };
+  }[];
 }
 
 export interface ProviderListing {
@@ -216,6 +291,7 @@ export interface AdminProvider {
   offersWholesale?: boolean;
   offersDelivery?: boolean;
   userEmail: string;
+  ownerEmail?: string;
   hasValidEmail?: boolean;
   createdAt: string;
 }

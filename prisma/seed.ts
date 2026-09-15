@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, ProductCategory, ProductUnit, SystemModule, AuditAction } from "@prisma/client";
+import { Prisma, PrismaClient, UserRole, ProductCategory, ProductUnit, SystemModule, AuditAction } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { isDemoSeedAllowed } from "../src/lib/seed/demo-guard";
 
@@ -114,27 +114,51 @@ async function main() {
     },
   });
 
+  async function upsertProviderByName(
+    userId: string,
+    businessName: string,
+    data: Omit<Prisma.ProviderUncheckedCreateInput, "userId" | "businessName">
+  ) {
+    const existing = await prisma.provider.findFirst({
+      where: { userId, businessName },
+    });
+    if (existing) {
+      return prisma.provider.update({
+        where: { id: existing.id },
+        data: { rating: 0, reviewCount: 0 },
+      });
+    }
+    return prisma.provider.create({
+      data: { userId, businessName, ...data },
+    });
+  }
+
   // ─── Proveedores (fruterías en Monterrey) ──────────────────────────────────
-  const providers = await Promise.all([
-    prisma.provider.upsert({
-      where: { userId: providerUser.id },
-      update: { rating: 0, reviewCount: 0 },
-      create: {
-        userId: providerUser.id,
-        businessName: "Frutas El Paraíso",
-        description: "Frutas frescas de temporada, orgánicas y de exportación. Entrega a domicilio.",
-        address: "Av. Constitución 1200, Centro, Monterrey",
-        latitude: 25.6714,
-        longitude: -100.3095,
-        phone: "+528110000002",
-        logoUrl: "https://images.unsplash.com/photo-1610831308542-9b788b11c4e0?w=400",
-        coverUrl: "https://images.unsplash.com/photo-1488459716781-31db525782fe?w=800",
-        rating: 0,
-        reviewCount: 0,
-        isVerified: true,
-      },
-    }),
-  ]);
+  const paraisoCentro = await upsertProviderByName(providerUser.id, "Frutas El Paraíso", {
+    description: "Frutas frescas de temporada, orgánicas y de exportación. Entrega a domicilio.",
+    address: "Av. Constitución 1200, Centro, Monterrey",
+    latitude: 25.6714,
+    longitude: -100.3095,
+    phone: "+528110000002",
+    logoUrl: "https://images.unsplash.com/photo-1610831308542-9b788b11c4e0?w=400",
+    coverUrl: "https://images.unsplash.com/photo-1488459716781-31db525782fe?w=800",
+    rating: 0,
+    reviewCount: 0,
+    isVerified: true,
+  });
+
+  const paraisoTec = await upsertProviderByName(providerUser.id, "El Paraíso Tecnológico", {
+    description: "Sucursal Tecnológico de Frutas El Paraíso. Catálogo y pedidos propios.",
+    address: "Av. Eugenio Garza Sada 2501, Tecnológico, Monterrey",
+    latitude: 25.6514,
+    longitude: -100.2895,
+    phone: "+528110000002",
+    logoUrl: "https://images.unsplash.com/photo-1610831308542-9b788b11c4e0?w=400",
+    coverUrl: "https://images.unsplash.com/photo-1488459716781-31db525782fe?w=800",
+    rating: 0,
+    reviewCount: 0,
+    isVerified: true,
+  });
 
   // Segundo proveedor sin cuenta de usuario vinculada (solo demo)
   const provider2User = await prisma.user.upsert({
@@ -149,23 +173,17 @@ async function main() {
     },
   });
 
-  const provider2 = await prisma.provider.upsert({
-    where: { userId: provider2User.id },
-    update: { rating: 0, reviewCount: 0 },
-    create: {
-      userId: provider2User.id,
-      businessName: "Campo Verde Frutería",
-      description: "Verduras de la huerta, directo del productor. Precios de mayoreo disponibles.",
-      address: "Calle Hidalgo 450, San Pedro, Monterrey",
-      latitude: 25.6515,
-      longitude: -100.4025,
-      phone: "+528110000004",
-      logoUrl: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400",
-      coverUrl: "https://images.unsplash.com/photo-1518843879619-1d2b755659a8?w=800",
-      rating: 0,
-      reviewCount: 0,
-      isVerified: true,
-    },
+  const provider2 = await upsertProviderByName(provider2User.id, "Campo Verde Frutería", {
+    description: "Verduras de la huerta, directo del productor. Precios de mayoreo disponibles.",
+    address: "Calle Hidalgo 450, San Pedro, Monterrey",
+    latitude: 25.6515,
+    longitude: -100.4025,
+    phone: "+528110000004",
+    logoUrl: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400",
+    coverUrl: "https://images.unsplash.com/photo-1518843879619-1d2b755659a8?w=800",
+    rating: 0,
+    reviewCount: 0,
+    isVerified: true,
   });
 
   const provider3User = await prisma.user.upsert({
@@ -180,23 +198,17 @@ async function main() {
     },
   });
 
-  const provider3 = await prisma.provider.upsert({
-    where: { userId: provider3User.id },
-    update: { rating: 0, reviewCount: 0 },
-    create: {
-      userId: provider3User.id,
-      businessName: "La Borrega Agrícola",
-      description: "Productos agrícolas locales: miel, mermeladas, frutos secos y más.",
-      address: "Blvd. Díaz Ordaz 2100, Santa Catarina",
-      latitude: 25.6736,
-      longitude: -100.4583,
-      phone: "+528110000005",
-      logoUrl: "https://images.unsplash.com/photo-1566385101042-1a0aa0c1269c?w=400",
-      coverUrl: "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=800",
-      rating: 0,
-      reviewCount: 0,
-      isVerified: false,
-    },
+  const provider3 = await upsertProviderByName(provider3User.id, "La Borrega Agrícola", {
+    description: "Productos agrícolas locales: miel, mermeladas, frutos secos y más.",
+    address: "Blvd. Díaz Ordaz 2100, Santa Catarina",
+    latitude: 25.6736,
+    longitude: -100.4583,
+    phone: "+528110000005",
+    logoUrl: "https://images.unsplash.com/photo-1566385101042-1a0aa0c1269c?w=400",
+    coverUrl: "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=800",
+    rating: 0,
+    reviewCount: 0,
+    isVerified: false,
   });
 
   // ─── Catálogo global de productos ──────────────────────────────────────────
@@ -253,7 +265,7 @@ async function main() {
     "chile-seco-ancho": 280,
   };
 
-  const allProviders = [providers[0], provider2, provider3];
+  const allProviders = [paraisoCentro, paraisoTec, provider2, provider3];
 
   for (const provider of allProviders) {
     for (const product of products) {
@@ -291,10 +303,11 @@ async function main() {
   console.log("✅ Seed completado:");
   console.log(`   ${modules.length} módulos`);
   console.log(`   ${products.length} productos en catálogo global`);
-  console.log(`   ${allProviders.length} proveedores`);
+  console.log(`   ${allProviders.length} sucursales (El Paraíso N=2, Campo Verde N=1)`);
   console.log(`   Usuarios demo (password: Demo1234!):`);
   console.log(`     admin@laborregamarket.mx  → ADMIN`);
-  console.log(`     frutas@elparaiso.mx       → PROVIDER`);
+  console.log(`     frutas@elparaiso.mx       → PROVIDER (Centro + Tecnológico)`);
+  console.log(`     verduras@campoverde.mx    → PROVIDER`);
   console.log(`     cliente@demo.mx           → CLIENT`);
 }
 

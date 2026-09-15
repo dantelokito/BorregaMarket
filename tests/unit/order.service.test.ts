@@ -182,7 +182,7 @@ describe("createPosSale", () => {
   });
 
   it("rejects DELIVERED + UNPAID", async () => {
-    prismaMock.provider.findUnique.mockResolvedValue({ id: "prov1", userId: "u2" });
+    prismaMock.provider.findFirst.mockResolvedValue({ id: "prov1", userId: "u2" });
     prismaMock.order.findUnique.mockResolvedValue(null);
 
     await expect(
@@ -205,7 +205,7 @@ describe("createPosSale", () => {
   });
 
   it("creates a walk-in sale with clientId null and no catalog FKs on custom lines", async () => {
-    prismaMock.provider.findUnique.mockResolvedValue({ id: "prov1", userId: "u2" });
+    prismaMock.provider.findFirst.mockResolvedValue({ id: "prov1", userId: "u2" });
     prismaMock.order.findUnique.mockResolvedValue(null);
     prismaMock.order.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
       id: "ord-pos",
@@ -255,7 +255,7 @@ describe("createPosSale", () => {
   });
 
   it("rejects unavailable catalog lines and does not create the sale", async () => {
-    prismaMock.provider.findUnique.mockResolvedValue({ id: "prov1", userId: "u2" });
+    prismaMock.provider.findFirst.mockResolvedValue({ id: "prov1", userId: "u2" });
     prismaMock.order.findUnique.mockResolvedValue(null);
     prismaMock.providerProduct.findMany.mockResolvedValue([
       {

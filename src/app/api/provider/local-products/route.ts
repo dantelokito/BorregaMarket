@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { UserRole } from "@prisma/client";
-import { getSession, requireRole, AuthError } from "@/lib/auth/session";
+import { AuthError } from "@/lib/auth/session";
+import { applyActiveProviderCookie, requireActiveProvider } from "@/lib/auth/active-provider";
 import { ok, apiError, fromZodError, handleRouteError } from "@/lib/api/response";
 import { createLocalProductSchema } from "@/lib/validators/catalog-f10";
 import {
@@ -13,14 +13,15 @@ import { ProviderNotFoundError } from "@/lib/services/provider.service";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = requireRole(getSession(request), UserRole.PROVIDER);
+    const ctx = await requireActiveProvider(request);
     const body = createLocalProductSchema.parse(await request.json());
     const created = await createLocalProduct({
-      userId: session.sub,
+      userId: ctx.session.sub,
+      providerId: ctx.provider.id,
       input: body,
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
-    return ok(created, 201);
+    return applyActiveProviderCookie(ok(created, 201), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) {
       return apiError(err.message, err.status);

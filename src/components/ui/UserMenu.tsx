@@ -59,6 +59,7 @@ export function UserMenu({ user }: UserMenuProps) {
     ],
     PROVIDER: [
       { href: "/proveedor", label: "Panel proveedor", icon: Store },
+      { href: "/registro/negocio", label: "Agregar frutería", icon: Store },
       { href: "/explorar", label: "Explorar", icon: Search },
     ],
     ADMIN: [

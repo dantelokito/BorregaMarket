@@ -38,13 +38,51 @@ export function ProviderTableF10({
   const pending = providers.find((p) => p.id === revokeId);
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+    <div>
+    <ul className="space-y-3 md:hidden">
+      {providers.map((p) => (
+        <li key={p.id} className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="font-semibold text-slate-900">{p.businessName}</p>
+          <p className="text-sm text-slate-500">Dueño: {p.ownerEmail || p.userEmail || "—"}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <AdminFlagSwitch
+              label={p.isVerified ? "Verificado" : "Pendiente"}
+              checked={p.isVerified}
+              disabled={busy === p.id}
+              onToggle={() => {
+                if (p.isVerified) setRevokeId(p.id);
+                else void patch(p.id, { isVerified: true });
+              }}
+            />
+            <AdminFlagSwitch
+              label="Activo"
+              checked={p.isActive}
+              disabled={busy === p.id}
+              onToggle={() => void patch(p.id, { isActive: !p.isActive })}
+            />
+            <AdminFlagSwitch
+              label="Mayoreo"
+              checked={p.offersWholesale === true}
+              disabled={busy === p.id}
+              onToggle={() => void patch(p.id, { offersWholesale: !p.offersWholesale })}
+            />
+            <AdminFlagSwitch
+              label="A domicilio"
+              checked={p.offersDelivery === true}
+              disabled={busy === p.id}
+              onToggle={() => void patch(p.id, { offersDelivery: !p.offersDelivery })}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
+    <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white md:block">
       <table className="w-full min-w-[720px] text-sm">
         <thead className="border-b border-gray-200 bg-gray-50">
           <tr>
-            <th className="px-4 py-3 text-left font-semibold">Negocio</th>
+            <th className="px-4 py-3 text-left font-semibold">Sucursal</th>
             <th className="px-4 py-3 text-left font-semibold">Ciudad</th>
-            <th className="px-4 py-3 text-left font-semibold">Email</th>
+            <th className="px-4 py-3 text-left font-semibold">Dueño</th>
             <th className="px-4 py-3 text-center font-semibold">Notificación</th>
             <th className="px-4 py-3 text-center font-semibold">Verificado</th>
             <th className="px-4 py-3 text-center font-semibold">Activo</th>
@@ -57,7 +95,7 @@ export function ProviderTableF10({
             <tr key={p.id}>
               <td className="px-4 py-3 font-medium">{p.businessName}</td>
               <td className="px-4 py-3 text-gray-500">{p.city}</td>
-              <td className="px-4 py-3 text-gray-500">{p.userEmail || "—"}</td>
+              <td className="px-4 py-3 text-gray-500">{p.ownerEmail || p.userEmail || "—"}</td>
               <td className="px-4 py-3 text-center">
                 {p.hasValidEmail === false ? (
                   <span className="inline-flex min-h-[44px] items-center gap-1 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-800">
@@ -107,6 +145,7 @@ export function ProviderTableF10({
           ))}
         </tbody>
       </table>
+    </div>
       <ConfirmDialog
         open={Boolean(pending)}
         title="Revocar verificación"

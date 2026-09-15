@@ -3,7 +3,7 @@ import { Decimal } from "@/lib/money";
 
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
-    provider: { findUnique: vi.fn() },
+    provider: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
     order: {
       aggregate: vi.fn(),
       groupBy: vi.fn(),
@@ -14,7 +14,12 @@ const { prismaMock } = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({ default: prismaMock }));
 
-import { getProviderDashboard, getProviderReport } from "@/lib/services/dashboard.service";
+import {
+  getGlobalProviderReport,
+  getProviderDashboard,
+  getProviderReport,
+  GlobalReportsNotAvailableError,
+} from "@/lib/services/dashboard.service";
 
 function emptyAgg() {
   return { _sum: { total: new Decimal(0) }, _count: 0 };
@@ -23,7 +28,7 @@ function emptyAgg() {
 describe("getProviderDashboard topProducts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    prismaMock.provider.findUnique.mockResolvedValue({
+    prismaMock.provider.findFirst.mockResolvedValue({
       id: "prov1",
       userId: "u2",
       businessName: "Frutas El Paraíso",
@@ -79,7 +84,7 @@ describe("getProviderReport", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    prismaMock.provider.findUnique.mockResolvedValue({
+    prismaMock.provider.findFirst.mockResolvedValue({
       id: "prov1",
       userId: "u2",
       businessName: "Frutas El Paraíso",
@@ -220,5 +225,21 @@ describe("getProviderReport", () => {
     expect(result.kpis.orderCount).toBe(48);
     expect(result.kpis.bySource.MARKETPLACE).toEqual({ gmv: "8200.00", orderCount: 30 });
     expect(result.kpis.bySource.POS).toEqual({ gmv: "4300.50", orderCount: 18 });
+  });
+});
+
+describe("getGlobalProviderReport", () => {
+  it("throws GLOBAL_REPORTS_NOT_AVAILABLE when N<=1", async () => {
+    prismaMock.provider.findMany.mockResolvedValue([
+      { id: "cv1", businessName: "Campo Verde Frutería" },
+    ]);
+    await expect(
+      getGlobalProviderReport({
+        userId: "u-cv",
+        from: "2026-09-01",
+        to: "2026-09-12",
+        productIds: [],
+      })
+    ).rejects.toBeInstanceOf(GlobalReportsNotAvailableError);
   });
 });

@@ -22,11 +22,13 @@ function applyPlatform() {
 export function SessionThemeProvider({ children }: { children: ReactNode }) {
   const hydrate = useCallback(async () => {
     const session = await getAuthSession();
-    if (session.role === "PROVIDER" && session.brand) {
+    if (session.role === "PROVIDER" && session.brand?.primaryColor) {
       const root = document.documentElement;
       root.style.setProperty("--brand", session.brand.primaryColor);
       root.style.setProperty("--brand-dark", darkenHex(session.brand.primaryColor));
-      root.style.setProperty("--brand-secondary", session.brand.secondaryColor);
+      if (session.brand.secondaryColor) {
+        root.style.setProperty("--brand-secondary", session.brand.secondaryColor);
+      }
     } else {
       applyPlatform();
     }

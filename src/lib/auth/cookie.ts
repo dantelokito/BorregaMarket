@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { TOKEN_COOKIE } from "@/lib/auth/types";
+import { ACTIVE_PROVIDER_COOKIE, TOKEN_COOKIE } from "@/lib/auth/types";
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
@@ -22,6 +22,20 @@ export function setSessionCookie(response: NextResponse, token: string) {
 
 export function clearSessionCookie(response: NextResponse) {
   response.cookies.set(TOKEN_COOKIE, "", {
+    ...sessionCookieOptions(),
+    maxAge: 0,
+  });
+}
+
+export function setActiveProviderCookie(response: NextResponse, providerId: string) {
+  response.cookies.set(ACTIVE_PROVIDER_COOKIE, providerId, {
+    ...sessionCookieOptions(),
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  });
+}
+
+export function clearActiveProviderCookie(response: NextResponse) {
+  response.cookies.set(ACTIVE_PROVIDER_COOKIE, "", {
     ...sessionCookieOptions(),
     maxAge: 0,
   });

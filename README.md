@@ -2,17 +2,17 @@
 
 Marketplace open source para **fruterías, verdulerías y productores agrícolas** en México. El objetivo es que un cliente encuentre negocio fresco cerca, compare y contacte o pida directo al proveedor — sin intermediarios.
 
-**Versión:** 0.5.0 · Licencia [MIT](./LICENSE)
+**Versión:** 0.11.0 · Licencia [MIT](./LICENSE)
 
 ## Qué puedes hacer
 
 | Quién | Qué ofrece la app |
 |-------|-------------------|
 | **Cliente** | Explorar en mapa (OpenStreetMap), filtrar por radio, ver horarios y reseñas, contactar o hacer pedido para recoger |
-| **Proveedor** | Catálogo sobre productos de la plataforma, precios, colores de marca, POS de mostrador, órdenes y reportes |
+| **Proveedor** | Una o más sucursales por usuario, switcher si N>1, catálogo/POS/órdenes, reportes por sucursal y reportes generales |
 | **Admin** | Curar el catálogo global, verificar negocios, moderar reseñas y ver analítica |
 
-La sesión usa JWT en cookie **httpOnly**. Las cuentas demo del seed **solo existen en desarrollo** y no se muestran en producción.
+La sesión usa JWT en cookie **httpOnly** (`sub` + `role`). El activo de sucursal va en cookie **`lbm_active_provider`** (httpOnly). Las cuentas demo del seed **solo existen en desarrollo**.
 
 ## Inicio rápido
 
@@ -35,15 +35,16 @@ npm run dev
 
 Abre [http://localhost:8080](http://localhost:8080).
 
-En Windows, detén `next dev` si `prisma generate` o `migrate` fallan porque el query engine está bloqueado.
+En Windows, detén `next dev` si `prisma generate` o `migrate` fallan (EPERM en el query engine). Tras pull F11: `npx prisma migrate deploy` **antes** de `npm run db:seed` (quita unique `Provider.userId`).
 
 ### Cuentas demo (solo local)
 
-| Email | Rol | Password |
-|-------|-----|----------|
-| admin@laborregamarket.mx | ADMIN | Demo1234! |
-| frutas@elparaiso.mx | PROVIDER | Demo1234! |
-| cliente@demo.mx | CLIENT | Demo1234! |
+| Email | Rol | Password | Sucursales seed |
+|-------|-----|----------|-----------------|
+| admin@laborregamarket.mx | ADMIN | Demo1234! | — |
+| frutas@elparaiso.mx | PROVIDER | Demo1234! | El Paraíso Centro + Tecnológico (N=2) |
+| verduras@campoverde.mx | PROVIDER | Demo1234! | Campo Verde (N=1) |
+| cliente@demo.mx | CLIENT | Demo1234! | — |
 
 No uses estas credenciales en producción. El seed se niega a crearlas si `NODE_ENV=production` (salvo `ALLOW_DEMO_SEED=true`). Rota `JWT_SECRET` en cada entorno.
 
@@ -65,7 +66,7 @@ Lista completa en [`.env.example`](./.env.example). **Nunca** subas un `.env` re
 | `NEXT_PUBLIC_APP_URL` | URL canónica (enlaces de email) |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Rate limit de contacto, login y registro (obligatorio en prod) |
 | `RESEND_API_KEY` / `EMAIL_FROM` | Email de contacto |
-| `CLOUDINARY_*` | Subida de imágenes |
+| `UPLOADS_DIR` | Media en disco (default `./uploads`; no Cloudinary Must) |
 | `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY` | Jobs async (`/api/inngest`) |
 | `WHATSAPP_*` | Notificaciones WhatsApp (opcional) |
 | `NEXT_PUBLIC_OSM_TILE_URL` | Teselas del mapa. Vacío = OSM por defecto |
@@ -84,7 +85,8 @@ Next.js 15, React 19, Tailwind CSS 4, Prisma 6, PostgreSQL 15+, JWT + bcrypt, Le
 | `/fruteria/[id]` | Detalle y contacto | Público |
 | `/carrito` | Pedido para recoger | CLIENT |
 | `/cuenta` | Perfil y direcciones | CLIENT |
-| `/proveedor/*` | Catálogo, POS, órdenes, dashboard | PROVIDER |
+| `/proveedor/*` | Catálogo, POS, órdenes, dashboard, reportes | PROVIDER |
+| `/proveedor/reportes-generales` | Reportes consolidados (solo N>1) | PROVIDER |
 | `/admin` | Catálogos, analítica, reseñas | ADMIN |
 
 Visión de producto: [PRODUCT.md](./PRODUCT.md). Cómo contribuir: [CONTRIBUTING.md](./CONTRIBUTING.md). Vulnerabilidades: [SECURITY.md](./SECURITY.md).

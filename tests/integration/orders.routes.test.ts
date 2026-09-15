@@ -10,6 +10,11 @@ const getOrderById = vi.fn();
 const createPosSale = vi.fn();
 const getProviderDashboard = vi.fn();
 
+vi.mock("@/lib/providers/owned-provider", () => ({
+  listOwnedProviders: vi.fn().mockResolvedValue([{ id: "prov1", userId: "u2" }]),
+  findOwnedProvider: vi.fn().mockResolvedValue({ id: "prov1", userId: "u2" }),
+}));
+
 vi.mock("@/lib/auth/session", async () => {
   const actual = await vi.importActual<typeof import("@/lib/auth/session")>(
     "@/lib/auth/session"

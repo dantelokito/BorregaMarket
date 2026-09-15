@@ -12,6 +12,7 @@ import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { buildMeta } from "@/lib/services/pagination";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+import { findOwnedProvider } from "@/lib/providers/owned-provider";
 import { AddressNotFoundError } from "@/lib/services/address.service";
 import { formatMoney, lineSubtotal, sumMoney, toMoney } from "@/lib/money";
 import { computeEtaMinutes } from "@/lib/geo/eta";
@@ -42,8 +43,8 @@ const ACTIVE_STATUSES: OrderStatus[] = [
   OrderStatus.IN_TRANSIT,
 ];
 
-export async function resolveProviderByUserId(userId: string) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
+export async function resolveProviderByUserId(userId: string, providerId?: string) {
+  const provider = await findOwnedProvider(userId, providerId);
   if (!provider) {
     throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
   }
@@ -320,11 +321,15 @@ export async function listClientOrders(params: {
 
 function assertOrderAccess(
   order: OrderRecord,
-  session: { sub: string; role: UserRole }
+  session: { sub: string; role: UserRole },
+  activeProviderId?: string
 ) {
   if (session.role === UserRole.ADMIN) return;
   if (session.role === UserRole.CLIENT && order.clientId === session.sub) return;
   if (session.role === UserRole.PROVIDER && order.provider.userId === session.sub) {
+    if (activeProviderId && order.providerId !== activeProviderId) {
+      throw new OrderForbiddenError();
+    }
     return;
   }
   throw new OrderForbiddenError();
@@ -333,6 +338,7 @@ function assertOrderAccess(
 export async function getOrderById(params: {
   orderId: string;
   session: { sub: string; role: UserRole };
+  activeProviderId?: string;
 }) {
   const order = await prisma.order.findUnique({
     where: { id: params.orderId },
@@ -342,7 +348,7 @@ export async function getOrderById(params: {
     throw new OrderNotFoundError();
   }
   const record = asOrderRecord(order);
-  assertOrderAccess(record, params.session);
+  assertOrderAccess(record, params.session, params.activeProviderId);
   const includeClient =
     params.session.role === UserRole.PROVIDER ||
     params.session.role === UserRole.ADMIN;
@@ -353,6 +359,7 @@ export async function transitionStatus(params: {
   orderId: string;
   nextStatus: OrderStatus;
   session: { sub: string; role: UserRole };
+  activeProviderId?: string;
   ipAddress?: string;
 }) {
   const order = await prisma.order.findUnique({
@@ -363,7 +370,7 @@ export async function transitionStatus(params: {
     throw new OrderNotFoundError();
   }
   const record = asOrderRecord(order);
-  assertOrderAccess(record, params.session);
+  assertOrderAccess(record, params.session, params.activeProviderId);
 
   if (params.session.role === UserRole.CLIENT) {
     if (!canTransition(record.status, params.nextStatus, UserRole.CLIENT)) {
@@ -421,6 +428,7 @@ export async function transitionStatus(params: {
 
 export async function listProviderOrders(params: {
   userId: string;
+  providerId?: string;
   page: number;
   limit: number;
   skip: number;
@@ -428,7 +436,7 @@ export async function listProviderOrders(params: {
   status?: OrderStatus;
   source?: OrderSource;
 }) {
-  const provider = await resolveProviderByUserId(params.userId);
+  const provider = await resolveProviderByUserId(params.userId, params.providerId);
 
   let statuses: OrderStatus[] | undefined;
   if (params.status) {

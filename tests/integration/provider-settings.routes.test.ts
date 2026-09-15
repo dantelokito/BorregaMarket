@@ -16,6 +16,40 @@ vi.mock("@/lib/auth/session", async () => {
   };
 });
 
+vi.mock("@/lib/providers/owned-provider", () => ({
+  listOwnedProviders: vi.fn().mockResolvedValue([
+    {
+      id: "p1",
+      userId: "u2",
+      businessName: "El Paraíso",
+      address: "Av. 1",
+      city: "Monterrey",
+      latitude: 25.67,
+      longitude: -100.31,
+      phone: "+5281",
+      description: null,
+      isVerified: false,
+      verifiedAt: null,
+      isActive: true,
+      logoUrl: null,
+      coverUrl: null,
+      preparationTimeMinutes: 20,
+      offersDelivery: false,
+      whatsappEnabled: false,
+      acceptsCardAtStore: false,
+      offersWholesale: false,
+      offersRetail: true,
+      openingHours: null,
+      googlePlaceId: null,
+      googleMapsUrl: null,
+      googleReviewsEnabled: false,
+      primaryColor: null,
+      secondaryColor: null,
+    },
+  ]),
+  findOwnedProvider: vi.fn().mockResolvedValue({ id: "p1", userId: "u2" }),
+}));
+
 vi.mock("@/lib/services/provider.service", async () => {
   const actual = await vi.importActual<typeof import("@/lib/services/provider.service")>(
     "@/lib/services/provider.service"

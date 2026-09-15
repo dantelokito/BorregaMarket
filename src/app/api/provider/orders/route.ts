@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
-import { UserRole } from "@prisma/client";
-import { getSession, requireRole } from "@/lib/auth/session";
+import { applyActiveProviderCookie, requireActiveProvider } from "@/lib/auth/active-provider";
 import { paginated } from "@/lib/api/response";
 import { parsePaginationParams } from "@/lib/services/pagination";
 import { handleOrderRouteError } from "@/lib/orders/http";
@@ -10,7 +9,7 @@ import { providerOrdersQuerySchema } from "@/lib/validators/order";
 /** Proveedor: órdenes de su negocio (tabs activas / completadas / canceladas) */
 export async function GET(request: NextRequest) {
   try {
-    const session = requireRole(getSession(request), UserRole.PROVIDER);
+    const ctx = await requireActiveProvider(request);
     const { searchParams } = new URL(request.url);
     const { page, limit, skip } = parsePaginationParams(searchParams, {
       defaultLimit: 20,
@@ -22,7 +21,8 @@ export async function GET(request: NextRequest) {
       source: searchParams.get("source") ?? undefined,
     });
     const result = await listProviderOrders({
-      userId: session.sub,
+      userId: ctx.session.sub,
+      providerId: ctx.provider.id,
       page,
       limit,
       skip,
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       status: query.status,
       source: query.source,
     });
-    return paginated(result.data, result.meta);
+    return applyActiveProviderCookie(paginated(result.data, result.meta), ctx.provider.id);
   } catch (err) {
     return handleOrderRouteError(err);
   }

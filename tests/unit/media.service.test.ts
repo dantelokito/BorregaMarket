@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
-    provider: { findUnique: vi.fn(), update: vi.fn() },
+    provider: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   },
 }));
 
@@ -34,7 +34,7 @@ function fileWithSize(size: number): File {
 describe("uploadProviderMedia size limit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    prismaMock.provider.findUnique.mockResolvedValue({
+    prismaMock.provider.findFirst.mockResolvedValue({
       id: "prov1",
       logoUrl: null,
       coverUrl: null,

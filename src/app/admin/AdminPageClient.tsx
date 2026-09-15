@@ -193,7 +193,7 @@ export function AdminPageClient() {
             <SkeletonTable rows={5} />
           </div>
         ) : providers.length === 0 ? (
-          <EmptyState title="Sin proveedores" description="No hay proveedores registrados." />
+          <EmptyState title="Sin sucursales" description="No hay sucursales registradas." />
         ) : (
           <ProviderTableF10
             providers={providers}

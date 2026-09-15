@@ -18,6 +18,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { BrandColorPicker } from "@/components/provider/BrandColorPicker";
 import { ProviderCatalogF10 } from "@/components/provider/catalog/ProviderCatalogF10";
 import { mapF10ApiError } from "@/lib/ui/f10-errors";
+import { ActiveStoreEyebrow } from "@/components/provider/ActiveStoreEyebrow";
 
 export function ProveedorPageClient() {
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
@@ -71,7 +72,8 @@ export function ProveedorPageClient() {
     <div className="mx-auto max-w-4xl px-6 py-8">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Mi catálogo — {businessName || "Tu frutería"}</h1>
+          <ActiveStoreEyebrow />
+          <h1 className="text-2xl font-bold">Catálogo</h1>
           <p className="text-sm text-gray-500">
             Activa el catálogo global o agrega productos solo de tu frutería.
           </p>
