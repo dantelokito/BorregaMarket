@@ -22,6 +22,7 @@ import {
   updateProviderSettings,
 } from "@/lib/services/provider.service";
 import { GoogleReviewsLockedError } from "@/lib/services/provider.service";
+import { assertNoPublicInventoryKeys } from "@/lib/inventory/metrics";
 
 describe("sellableProviderProductWhere", () => {
   it("requires isAvailable and Product.isActive", () => {
@@ -97,6 +98,7 @@ describe("getProviderDetail", () => {
     expect(detail.hoursPublished).toBe(false);
     expect(detail.isOpenNow).toBeNull();
     expect(detail.reviewsPreview).toEqual([]);
+    expect(assertNoPublicInventoryKeys(detail)).toEqual([]);
   });
 });
 

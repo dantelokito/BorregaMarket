@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Search, Zap } from "lucide-react";
-import { getMyProducts } from "@/lib/api/provider-panel";
+import { getMyBusiness, getMyProducts } from "@/lib/api/provider-panel";
+import { PosProductCard } from "@/components/pos/PosProductCard";
 import { createPosSale } from "@/lib/api/provider-ops";
 import { ApiError } from "@/lib/api/client";
 import type { CatalogItem, Order, UnitOfMeasure } from "@/lib/api/types";
@@ -37,6 +38,7 @@ interface TicketLine {
 export function PosPageClient() {
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [businessName, setBusinessName] = useState("");
+  const [posShowImages, setPosShowImages] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -92,6 +94,12 @@ export function PosPageClient() {
       const { data } = await getMyProducts();
       setCatalog(data.catalog);
       setBusinessName(data.provider.businessName);
+      try {
+        const me = await getMyBusiness();
+        setPosShowImages(me.data.posShowImages !== false);
+      } catch {
+        setPosShowImages(true);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No pudimos cargar el catálogo");
     } finally {
@@ -332,17 +340,12 @@ export function PosPageClient() {
         ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {filtered.map((item) => (
-              <button
+              <PosProductCard
                 key={item.product.id}
-                type="button"
-                onClick={() => addCatalogItem(item)}
-                className="rounded-xl border border-gray-200 bg-white p-4 text-left hover:border-[var(--brand)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-              >
-                <p className="font-medium">{item.product.name}</p>
-                <p className="mt-1 text-sm font-semibold tabular-nums">
-                  {formatCurrency(item.price ?? 0)} / {toUnitOfMeasure(item.product.unit)}
-                </p>
-              </button>
+                item={item}
+                showImage={posShowImages}
+                onSelect={() => addCatalogItem(item)}
+              />
             ))}
           </div>
         )}

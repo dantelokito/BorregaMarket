@@ -24,6 +24,7 @@ import {
   normalizeOpeningHours,
 } from "@/lib/providers/opening-hours";
 import { findOwnedProvider } from "@/lib/providers/owned-provider";
+import { CatalogForbiddenError } from "@/lib/services/local-product.service";
 
 export class ProviderConflictError extends Error {
   constructor(message = "Ya tienes un negocio registrado") {
@@ -553,6 +554,7 @@ function serializeProviderSettings(provider: {
   acceptsCardAtStore?: boolean;
   offersWholesale?: boolean;
   offersRetail?: boolean;
+  posShowImages?: boolean;
   openingHours?: Prisma.JsonValue | null;
 }) {
   const openingHours = normalizeOpeningHours(provider.openingHours);
@@ -576,6 +578,7 @@ function serializeProviderSettings(provider: {
     acceptsCardAtStore: provider.acceptsCardAtStore ?? false,
     offersWholesale: provider.offersWholesale ?? false,
     offersRetail: provider.offersRetail ?? true,
+    posShowImages: provider.posShowImages ?? true,
     openingHours,
     googlePlaceId: provider.googlePlaceId,
     googleMapsUrl: provider.googleMapsUrl,
@@ -599,6 +602,13 @@ export async function updateProviderSettings(params: {
   const provider = await findOwnedProvider(params.userId, params.providerId);
   if (!provider) {
     throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
+  }
+
+  if (
+    (params.input.providerId && params.input.providerId !== provider.id) ||
+    (params.input.id && params.input.id !== provider.id)
+  ) {
+    throw new CatalogForbiddenError();
   }
 
   if (bodyTouchesGoogle(params.input) && !provider.isVerified) {
@@ -669,6 +679,9 @@ export async function updateProviderSettings(params: {
         : {}),
       ...(params.input.offersRetail !== undefined
         ? { offersRetail: params.input.offersRetail }
+        : {}),
+      ...(params.input.posShowImages !== undefined
+        ? { posShowImages: params.input.posShowImages }
         : {}),
       ...(params.input.openingHours !== undefined
         ? {

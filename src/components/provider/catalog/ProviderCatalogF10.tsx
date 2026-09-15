@@ -25,15 +25,26 @@ import { SectionBlock } from "./SectionBlock";
 import { ScopeBadge } from "./ScopeBadge";
 import { ProductImageDropzone } from "./ProductImageDropzone";
 import { ProductFormDrawer } from "./ProductFormDrawer";
+import { CatalogRowThumb } from "@/components/inventory/CatalogRowThumb";
+import { InventoryCapacityBar } from "@/components/inventory/InventoryCapacityBar";
+import { PosImagesToggle } from "@/components/inventory/PosImagesToggle";
 
 export function ProviderCatalogF10({
   catalog,
   sections,
   onReload,
+  posShowImages,
+  onPosShowImagesChange,
+  posImagesBusy,
+  posImagesError,
 }: {
   catalog: CatalogItem[];
   sections: ProviderSection[];
   onReload: () => Promise<void>;
+  posShowImages: boolean;
+  onPosShowImagesChange: (next: boolean) => void;
+  posImagesBusy?: boolean;
+  posImagesError?: string;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<CatalogItem | null>(null);
@@ -159,15 +170,24 @@ export function ProviderCatalogF10({
         className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-medium">{item.product.name}</p>
-            <ScopeBadge scope={item.scope} />
+          <div className="flex flex-wrap items-center gap-3">
+            <CatalogRowThumb
+              src={item.imageUrl ?? item.product.imageUrl}
+              name={item.product.name}
+              category={item.product.category}
+            />
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-medium">{item.product.name}</p>
+                <ScopeBadge scope={item.scope} />
+              </div>
+              <PriceInput
+                value={item.price}
+                unit={item.product.unit}
+                onSave={(price) => savePrice(item, price)}
+              />
+            </div>
           </div>
-          <PriceInput
-            value={item.price}
-            unit={item.product.unit}
-            onSave={(price) => savePrice(item, price)}
-          />
           {sections.length > 0 && (
             <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
               <span className="sr-only">Sección de {item.product.name}</span>
@@ -191,6 +211,11 @@ export function ProviderCatalogF10({
               {rowErrors[key]}
             </p>
           )}
+        </div>
+        <div className="w-full min-w-[80px] sm:w-28">
+          {item.providerProductId ? (
+            <InventoryCapacityBar fillPercent={item.fillPercent} compact />
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {item.providerProductId && (
@@ -256,6 +281,12 @@ export function ProviderCatalogF10({
         }}
         onNewSection={() => setNewSectionOpen(true)}
         addDisabled={sections.length === 0}
+      />
+      <PosImagesToggle
+        checked={posShowImages}
+        onChange={onPosShowImagesChange}
+        disabled={posImagesBusy}
+        error={posImagesError}
       />
 
       {newSectionOpen && (

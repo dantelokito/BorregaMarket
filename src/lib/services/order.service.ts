@@ -34,6 +34,7 @@ import {
   type OrderRecord,
 } from "@/lib/orders/serialize";
 import { canTransition } from "@/lib/orders/transitions";
+import { decrementOnHandForLines } from "@/lib/services/inventory.service";
 import type { CreateMarketplaceOrderInput } from "@/lib/validators/order";
 import { inngest } from "@/lib/inngest/client";
 
@@ -380,10 +381,33 @@ export async function transitionStatus(params: {
     throw new InvalidTransitionError();
   }
 
-  const updated = await prisma.order.update({
-    where: { id: order.id },
-    data: { status: params.nextStatus },
-    include: orderDetailInclude,
+  const updated = await prisma.$transaction(async (tx) => {
+    if (
+      params.nextStatus === OrderStatus.DELIVERED &&
+      record.status !== OrderStatus.DELIVERED &&
+      record.source === OrderSource.MARKETPLACE
+    ) {
+      const items = await tx.orderItem.findMany({
+        where: { orderId: order.id },
+        include: { providerProduct: { include: { product: true } }, product: true },
+      });
+      await decrementOnHandForLines(
+        tx,
+        order.providerId,
+        items.map((item) => ({
+          providerProductId: item.providerProductId,
+          quantity: item.quantity,
+          unitOfMeasure: item.unitOfMeasure,
+          productUnit: item.providerProduct?.product.unit ?? item.product?.unit,
+        }))
+      );
+    }
+
+    return tx.order.update({
+      where: { id: order.id },
+      data: { status: params.nextStatus },
+      include: orderDetailInclude,
+    });
   });
   await writeAuditLog({
     module: SystemModule.ORDERS,

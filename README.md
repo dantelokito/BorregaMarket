@@ -2,14 +2,14 @@
 
 Marketplace open source para **fruterías, verdulerías y productores agrícolas** en México. El objetivo es que un cliente encuentre negocio fresco cerca, compare y contacte o pida directo al proveedor — sin intermediarios.
 
-**Versión:** 0.11.0 · Licencia [MIT](./LICENSE)
+**Versión:** 0.12.0 · Licencia [MIT](./LICENSE)
 
 ## Qué puedes hacer
 
 | Quién | Qué ofrece la app |
 |-------|-------------------|
 | **Cliente** | Explorar en mapa (OpenStreetMap), filtrar por radio, ver horarios y reseñas, contactar o hacer pedido para recoger |
-| **Proveedor** | Una o más sucursales por usuario, switcher si N>1, catálogo/POS/órdenes, reportes por sucursal y reportes generales |
+| **Proveedor** | Una o más sucursales, inventario blando por sucursal, catálogo/POS/órdenes, reportes por sucursal y reportes generales |
 | **Admin** | Curar el catálogo global, verificar negocios, moderar reseñas y ver analítica |
 
 La sesión usa JWT en cookie **httpOnly** (`sub` + `role`). El activo de sucursal va en cookie **`lbm_active_provider`** (httpOnly). Las cuentas demo del seed **solo existen en desarrollo**.
@@ -35,7 +35,7 @@ npm run dev
 
 Abre [http://localhost:8080](http://localhost:8080).
 
-En Windows, detén `next dev` si `prisma generate` o `migrate` fallan (EPERM en el query engine). Tras pull F11: `npx prisma migrate deploy` **antes** de `npm run db:seed` (quita unique `Provider.userId`).
+En Windows, detén `next dev` si `prisma generate` o `migrate` fallan (EPERM en el query engine). Tras pull F12: `npx prisma migrate deploy` (inventario Decimal + `pos_show_images`). Cloudinary no es Must.
 
 ### Cuentas demo (solo local)
 
@@ -85,7 +85,8 @@ Next.js 15, React 19, Tailwind CSS 4, Prisma 6, PostgreSQL 15+, JWT + bcrypt, Le
 | `/fruteria/[id]` | Detalle y contacto | Público |
 | `/carrito` | Pedido para recoger | CLIENT |
 | `/cuenta` | Perfil y direcciones | CLIENT |
-| `/proveedor/*` | Catálogo, POS, órdenes, dashboard, reportes | PROVIDER |
+| `/proveedor/*` | Catálogo, inventario, POS, órdenes, dashboard, reportes | PROVIDER |
+| `/proveedor/inventario` | Inventario blando (on_hand, umbral, caja) | PROVIDER |
 | `/proveedor/reportes-generales` | Reportes consolidados (solo N>1) | PROVIDER |
 | `/admin` | Catálogos, analítica, reseñas | ADMIN |
 
