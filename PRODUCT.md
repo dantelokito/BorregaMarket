@@ -1,8 +1,8 @@
 # LaBorregaMarket — Product Overview
 
-> **Versión del producto:** 0.11.0  
-> **Última actualización:** 12/09/2026  
-> **Estado:** Pre-lanzamiento — User 1:N sucursales, cookie activa, reportes globales, media disco  
+> **Versión del producto:** 0.12.0  
+> **Última actualización:** 15/09/2026  
+> **Estado:** Pre-lanzamiento — inventario blando Decimal por sucursal, User 1:N, media disco  
 > **Licencia:** [MIT](./LICENSE)
 
 ---
@@ -274,7 +274,14 @@ Cada proveedor tiene entradas `ProviderProduct` con variación de precio (~±10%
 - [x] Seed El Paraíso ×2 + Campo Verde N=1
 - [x] Explorar lista cards por Provider (honra `lat`/`lng` de URL)
 
-### Fase 12+ — Canales y monetización
+### Fase 12 — Inventario blando (v0.12.0)
+
+- [x] `on_hand` Decimal por sucursal; `stock` Int deprecado (no eliminado)
+- [x] Alertas por umbral %, capacidad, factor caja
+- [x] POS y catálogo leen inventario blando; `pos_show_images`
+- [x] Ruta `/proveedor/inventario` y APIs `/api/provider/inventory`
+
+### Fase 13+ — Canales y monetización
 
 - [ ] PWA / app móvil
 - [ ] Pagos en línea (pasarela)
@@ -321,7 +328,7 @@ LaBorregaMarket es un proyecto público con licencia MIT.
 | Reportar vulnerabilidades | `SECURITY.md` |
 | Esquema como contrato | `prisma/schema.prisma` |
 | Seed reproducible (solo local) | `prisma/seed.ts` |
-| Versionado | `0.11.0`; pagos y PWA en el roadmap |
+| Versionado | `0.12.0`; pagos y PWA en el roadmap |
 
 ---
 

@@ -6,6 +6,7 @@ import {
   getMyBusiness,
   getMyProducts,
   listSections,
+  updateProviderSettings,
   uploadProviderMedia,
 } from "@/lib/api/provider-panel";
 import { ApiError } from "@/lib/api/client";
@@ -30,6 +31,9 @@ export function ProveedorPageClient() {
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [error, setError] = useState("");
+  const [posShowImages, setPosShowImages] = useState(true);
+  const [posImagesBusy, setPosImagesBusy] = useState(false);
+  const [posImagesError, setPosImagesError] = useState("");
 
   const load = useCallback(async () => {
     const [{ data: business }, { data: products }, sectionsRes] = await Promise.all([
@@ -43,6 +47,7 @@ export function ProveedorPageClient() {
     setCoverUrl(business.coverUrl);
     setCatalog(products.catalog);
     setSections(sectionsRes.data);
+    setPosShowImages(business.posShowImages !== false);
   }, []);
 
   useEffect(() => {
@@ -140,7 +145,29 @@ export function ProveedorPageClient() {
 
           <BrandColorPicker />
 
-          <ProviderCatalogF10 catalog={catalog} sections={sections} onReload={load} />
+          <ProviderCatalogF10
+            catalog={catalog}
+            sections={sections}
+            onReload={load}
+            posShowImages={posShowImages}
+            posImagesBusy={posImagesBusy}
+            posImagesError={posImagesError}
+            onPosShowImagesChange={(next) => {
+              const prev = posShowImages;
+              setPosShowImages(next);
+              setPosImagesError("");
+              setPosImagesBusy(true);
+              void updateProviderSettings({ posShowImages: next })
+                .then(() => {
+                  setPosImagesBusy(false);
+                })
+                .catch(() => {
+                  setPosShowImages(prev);
+                  setPosImagesBusy(false);
+                  setPosImagesError("No se guardó la preferencia");
+                });
+            }}
+          />
           <ProviderSettingsForm />
         </>
       )}

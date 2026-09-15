@@ -1,4 +1,4 @@
-import { AuditAction, ProductScope, SystemModule } from "@prisma/client";
+import { AuditAction, Prisma, ProductScope, SystemModule } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
@@ -8,6 +8,7 @@ import {
   CatalogNotFoundError,
   WrongProductRouteError,
 } from "@/lib/services/local-product.service";
+import { catalogBarFields, sumReservedByProductIds } from "@/lib/services/inventory.service";
 
 export interface UpsertProviderProductInput {
   productId: string;
@@ -67,12 +68,30 @@ export async function getProviderCatalog(userId: string, providerId?: string) {
     return a.product.name.localeCompare(b.product.name, "es");
   });
 
+  const instanceIds = providerProducts.map((pp) => pp.id);
+  const reservedMap = await sumReservedByProductIds(provider.id, instanceIds);
+
   return {
     provider: {
       id: provider.id,
       businessName: provider.businessName,
     },
-    catalog: catalog.map(({ sortOrder: _s, ...row }) => row),
+    catalog: catalog.map(({ sortOrder: _s, ...row }) => {
+      const pp = ppMap.get(row.product.id);
+      if (!pp) return row;
+      const bar = catalogBarFields(pp, reservedMap.get(pp.id) ?? new Prisma.Decimal(0));
+      if (!bar) return row;
+      return {
+        ...row,
+        onHand: bar.onHand,
+        capacityMax: bar.capacityMax,
+        fillPercent: bar.fillPercent,
+        alertThresholdPercent: bar.alertThresholdPercent,
+        alertEnabled: bar.alertEnabled,
+        lowStockAlert: bar.lowStockAlert,
+        reserved: bar.reserved,
+      };
+    }),
   };
 }
 

@@ -11,12 +11,16 @@ const { prismaMock } = vi.hoisted(() => ({
       count: vi.fn(),
       update: vi.fn(),
     },
+    orderItem: {
+      findMany: vi.fn(),
+    },
     provider: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
     },
     providerProduct: {
       findMany: vi.fn(),
+      update: vi.fn(),
     },
     user: {
       findUnique: vi.fn(),
@@ -24,6 +28,7 @@ const { prismaMock } = vi.hoisted(() => ({
     userAddress: {
       findFirst: vi.fn(),
     },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -44,6 +49,14 @@ import { createPosSale } from "@/lib/services/pos.service";
 import { ProductUnavailableError } from "@/lib/orders/errors";
 import { OrderValidationError } from "@/lib/orders/errors";
 import { inngest } from "@/lib/inngest/client";
+
+beforeEach(() => {
+  prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) =>
+    fn(prismaMock)
+  );
+  prismaMock.orderItem.findMany.mockResolvedValue([]);
+  prismaMock.providerProduct.update.mockResolvedValue({});
+});
 
 const includeShape = expect.any(Object);
 
@@ -281,6 +294,82 @@ describe("createPosSale", () => {
     ).rejects.toBeInstanceOf(ProductUnavailableError);
     expect(prismaMock.order.create).not.toHaveBeenCalled();
   });
+
+  it("allows a catalog sale when onHand is zero and decrements inventory", async () => {
+    prismaMock.provider.findFirst.mockResolvedValue({ id: "prov1", userId: "u2" });
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.providerProduct.findMany.mockResolvedValue([
+      {
+        id: "pp1",
+        providerId: "prov1",
+        productId: "prod1",
+        isAvailable: true,
+        price: new Decimal("10.00"),
+        onHand: new Decimal("0"),
+        product: { name: "Mango", isActive: true, unit: "KG" },
+      },
+    ]);
+    prismaMock.order.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+      id: "ord-pos",
+      source: OrderSource.POS,
+      status: data.status,
+      paymentMethod: data.paymentMethod,
+      paidAt: data.paidAt,
+      providerId: "prov1",
+      clientId: null,
+      customerName: null,
+      notes: null,
+      total: data.total,
+      createdAt: new Date("2026-08-13T18:05:00.000Z"),
+      fulfillmentType: "PICKUP",
+      etaMinutes: null,
+      deliveryAddressSnapshot: null,
+      items: (data.items as { create: unknown[] }).create,
+      provider: { id: "prov1", businessName: "Don Carlos", userId: "u2" },
+      client: null,
+    }));
+
+    const result = await createPosSale({
+      userId: "u2",
+      idempotencyKey: "11111111-1111-4111-8111-111111111111",
+      input: {
+        paymentMethod: PaymentMethod.CASH,
+        status: OrderStatus.DELIVERED,
+        items: [{ providerProductId: "pp1", quantity: "1.500", unitOfMeasure: "KG" }],
+      },
+    });
+    expect(result.replay).toBe(false);
+    expect(prismaMock.providerProduct.update).toHaveBeenCalled();
+  });
+
+  it("rejects catalog lines of another sucursal with OrderForbiddenError", async () => {
+    prismaMock.provider.findFirst.mockResolvedValue({ id: "prov-centro", userId: "u2" });
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.providerProduct.findMany.mockResolvedValue([
+      {
+        id: "pp-tec",
+        providerId: "prov-tec",
+        productId: "prod1",
+        isAvailable: true,
+        price: new Decimal("10.00"),
+        product: { name: "Mango", isActive: true, unit: "KG" },
+      },
+    ]);
+
+    await expect(
+      createPosSale({
+        userId: "u2",
+        providerId: "prov-centro",
+        idempotencyKey: "11111111-1111-4111-8111-111111111111",
+        input: {
+          paymentMethod: PaymentMethod.CASH,
+          status: OrderStatus.DELIVERED,
+          items: [{ providerProductId: "pp-tec", quantity: "1", unitOfMeasure: "KG" }],
+        },
+      })
+    ).rejects.toMatchObject({ name: "OrderForbiddenError" });
+    expect(prismaMock.order.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("createMarketplaceOrder Should delivery", () => {
@@ -389,6 +478,7 @@ describe("createMarketplaceOrder Should delivery", () => {
     expect(payload.etaMinutes).toBe(20);
     expect(prismaMock.userAddress.findFirst).not.toHaveBeenCalled();
     expect(result.order.fulfillmentType).toBe("PICKUP");
+    expect(prismaMock.providerProduct.update).not.toHaveBeenCalled();
   });
 
   it("DELIVERY persists address snapshot and etaMinutes", async () => {
@@ -507,5 +597,75 @@ describe("transitionStatus Should notify", () => {
     });
     expect(result.status).toBe(OrderStatus.IN_TRANSIT);
     expect(prismaMock.order.update).toHaveBeenCalled();
+  });
+
+  it("commits onHand on first MARKETPLACE DELIVERED", async () => {
+    prismaMock.order.findUnique.mockResolvedValue({
+      id: "ord1",
+      source: OrderSource.MARKETPLACE,
+      status: OrderStatus.IN_TRANSIT,
+      paymentMethod: PaymentMethod.UNPAID,
+      paidAt: null,
+      providerId: "prov1",
+      clientId: "client1",
+      customerName: null,
+      notes: null,
+      total: new Decimal("10.00"),
+      createdAt: new Date(),
+      fulfillmentType: "PICKUP",
+      etaMinutes: 20,
+      deliveryAddressSnapshot: null,
+      items: [
+        {
+          providerProductId: "pp1",
+          quantity: new Decimal("2"),
+          unitOfMeasure: "KG",
+        },
+      ],
+      provider: { id: "prov1", businessName: "Don Carlos", userId: "u2" },
+      client: { id: "client1", name: "María", phone: "811" },
+    });
+    prismaMock.orderItem.findMany.mockResolvedValue([
+      {
+        providerProductId: "pp1",
+        quantity: new Decimal("2"),
+        unitOfMeasure: "KG",
+        providerProduct: { product: { unit: "KG" } },
+        product: { unit: "KG" },
+      },
+    ]);
+    prismaMock.providerProduct.findMany.mockResolvedValue([
+      {
+        id: "pp1",
+        providerId: "prov1",
+        product: { unit: "KG" },
+      },
+    ]);
+    prismaMock.order.update.mockResolvedValue({
+      id: "ord1",
+      source: OrderSource.MARKETPLACE,
+      status: OrderStatus.DELIVERED,
+      paymentMethod: PaymentMethod.UNPAID,
+      paidAt: null,
+      providerId: "prov1",
+      clientId: "client1",
+      customerName: null,
+      notes: null,
+      total: new Decimal("10.00"),
+      createdAt: new Date(),
+      fulfillmentType: "PICKUP",
+      etaMinutes: 20,
+      deliveryAddressSnapshot: null,
+      items: [],
+      provider: { id: "prov1", businessName: "Don Carlos", userId: "u2" },
+      client: { id: "client1", name: "María", phone: "811" },
+    });
+
+    await transitionStatus({
+      orderId: "ord1",
+      nextStatus: OrderStatus.DELIVERED,
+      session: { sub: "u2", role: UserRole.PROVIDER },
+    });
+    expect(prismaMock.providerProduct.update).toHaveBeenCalled();
   });
 });

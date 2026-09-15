@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
+import { ZodError } from "zod";
 import { AuthError } from "@/lib/auth/session";
 import { applyActiveProviderCookie, requireActiveProvider } from "@/lib/auth/active-provider";
-import { ok, apiError, handleRouteError } from "@/lib/api/response";
+import { ok, apiError, fromZodError, handleRouteError } from "@/lib/api/response";
 import { patchProviderSettingsSchema } from "@/lib/validators/provider-settings";
 import {
   toProviderSettings,
@@ -10,6 +11,7 @@ import {
   ProviderNotFoundError,
   ProviderSettingsValidationError,
 } from "@/lib/services/provider.service";
+import { CatalogForbiddenError } from "@/lib/services/local-product.service";
 
 export async function GET(request: NextRequest) {
   try {
@@ -43,6 +45,9 @@ export async function PATCH(request: NextRequest) {
     if (err instanceof AuthError) {
       return apiError(err.message, err.status);
     }
+    if (err instanceof CatalogForbiddenError) {
+      return apiError(err.message, 403);
+    }
     if (err instanceof GoogleReviewsLockedError) {
       return apiError(err.message, 403);
     }
@@ -56,6 +61,11 @@ export async function PATCH(request: NextRequest) {
       return apiError("Validation failed", 400, [
         { field: "body", message: "JSON inválido" },
       ]);
+    }
+    if (err instanceof ZodError) {
+      const details = fromZodError(err);
+      const posField = details.some((d) => d.field === "posShowImages");
+      return apiError(posField ? "Datos inválidos" : "Validation failed", 400, details);
     }
     return handleRouteError(err);
   }
