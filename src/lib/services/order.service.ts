@@ -14,6 +14,7 @@ import { buildMeta } from "@/lib/services/pagination";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
 import { findOwnedProvider } from "@/lib/providers/owned-provider";
 import { AddressNotFoundError } from "@/lib/services/address.service";
+import { effectiveSaleUnit } from "@/lib/catalog/sellable";
 import { formatMoney, lineSubtotal, sumMoney, toMoney } from "@/lib/money";
 import { computeEtaMinutes } from "@/lib/geo/eta";
 import { haversineKm } from "@/lib/geo/haversine";
@@ -177,7 +178,7 @@ export async function createMarketplaceOrder(params: {
         },
       ]);
     }
-    if (!pp.isAvailable || !pp.product.isActive) {
+    if (!pp.isAvailable || !pp.product.isActive || pp.archivedAt) {
       throw new ProductUnavailableError();
     }
     const unitPrice = toMoney(pp.price);
@@ -398,7 +399,12 @@ export async function transitionStatus(params: {
           providerProductId: item.providerProductId,
           quantity: item.quantity,
           unitOfMeasure: item.unitOfMeasure,
-          productUnit: item.providerProduct?.product.unit ?? item.product?.unit,
+          productUnit: item.providerProduct
+            ? effectiveSaleUnit(
+                item.providerProduct.saleUnit,
+                item.providerProduct.product.unit
+              )
+            : item.product?.unit,
         }))
       );
     }

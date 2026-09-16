@@ -3,11 +3,21 @@ import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { slugify } from "@/lib/validation/plain-text";
 import { assertRateLimit } from "@/lib/rate-limit/token-bucket";
-import { buildMeta, parsePaginationParams } from "@/lib/services/pagination";
+import { buildMeta, parseStrictPagination } from "@/lib/services/pagination";
 import type {
   CreateAdminProductInput,
   PatchAdminProductInput,
 } from "@/lib/validators/catalog-f10";
+
+export class AdminQueryError extends Error {
+  constructor(
+    message: string,
+    public details: { field: string; message: string }[]
+  ) {
+    super(message);
+    this.name = "AdminQueryError";
+  }
+}
 
 export class ProductConflictError extends Error {
   constructor(message = "El slug ya existe en el catálogo global") {
@@ -46,7 +56,9 @@ function serializeProduct(product: {
   imageUrl: string | null;
   isActive: boolean;
   scope: ProductScope;
+  ownerProviderId: string | null;
   createdAt: Date;
+  ownerProvider?: { businessName: string } | null;
 }) {
   return {
     id: product.id,
@@ -58,6 +70,8 @@ function serializeProduct(product: {
     imageUrl: product.imageUrl,
     isActive: product.isActive,
     scope: product.scope,
+    ownerProviderId: product.ownerProviderId,
+    ownerBusinessName: product.ownerProvider?.businessName ?? null,
     createdAt: product.createdAt.toISOString(),
   };
 }
@@ -66,13 +80,32 @@ export async function listAdminProducts(params: {
   searchParams: URLSearchParams;
   q?: string;
   isActive?: boolean;
+  scope?: ProductScope;
+  ownerProviderId?: string;
 }) {
-  const { page, limit, skip } = parsePaginationParams(params.searchParams, {
-    defaultLimit: 20,
+  const { page, limit, skip } = parseStrictPagination(params.searchParams, {
+    defaultLimit: 50,
     maxLimit: 100,
   });
+
+  if (params.scope === ProductScope.GLOBAL && params.ownerProviderId) {
+    throw new AdminQueryError("Datos inválidos", [
+      { field: "ownerProviderId", message: "ownerProviderId no aplica a scope=GLOBAL" },
+    ]);
+  }
+
+  if (params.ownerProviderId) {
+    const owner = await prisma.provider.findUnique({
+      where: { id: params.ownerProviderId },
+      select: { id: true },
+    });
+    if (!owner) {
+      return { data: [], meta: buildMeta(page, limit, 0) };
+    }
+  }
+
   const where: Prisma.ProductWhereInput = {
-    scope: ProductScope.GLOBAL,
+    ...(params.scope ? { scope: params.scope } : {}),
     ...(params.q
       ? {
           OR: [
@@ -82,11 +115,13 @@ export async function listAdminProducts(params: {
         }
       : {}),
     ...(params.isActive !== undefined ? { isActive: params.isActive } : {}),
+    ...(params.ownerProviderId ? { ownerProviderId: params.ownerProviderId, scope: ProductScope.LOCAL } : {}),
   };
 
   const [rows, total] = await Promise.all([
     prisma.product.findMany({
       where,
+      include: { ownerProvider: { select: { businessName: true } } },
       orderBy: { name: "asc" },
       skip,
       take: limit,
@@ -133,6 +168,7 @@ export async function createAdminProduct(params: {
       scope: ProductScope.GLOBAL,
       ownerProviderId: null,
     },
+    include: { ownerProvider: { select: { businessName: true } } },
   });
 
   await writeAuditLog({
@@ -153,27 +189,43 @@ export async function updateAdminProduct(params: {
   adminUserId: string;
   ipAddress?: string;
 }) {
-  const product = await prisma.product.findUnique({ where: { id: params.id } });
-  if (!product || product.scope !== ProductScope.GLOBAL) {
+  const product = await prisma.product.findUnique({
+    where: { id: params.id },
+    include: { ownerProvider: { select: { businessName: true } } },
+  });
+  if (!product) {
     throw new ProductNotFoundError();
   }
 
-  if (params.input.slug && params.input.slug !== product.slug) {
+  if (product.scope === ProductScope.LOCAL) {
+    const extra = Object.keys(params.input).filter((key) => key !== "isActive");
+    if (extra.length > 0 || params.input.isActive === undefined) {
+      throw new AdminQueryError("Datos inválidos", [
+        { field: "body", message: "LOCAL solo admite isActive" },
+      ]);
+    }
+  }
+
+  if (product.scope === ProductScope.GLOBAL && params.input.slug && params.input.slug !== product.slug) {
     await assertGlobalSlugFree(params.input.slug, product.id);
   }
 
   const updated = await prisma.product.update({
     where: { id: product.id },
-    data: {
-      ...(params.input.name !== undefined ? { name: params.input.name } : {}),
-      ...(params.input.slug !== undefined ? { slug: params.input.slug } : {}),
-      ...(params.input.description !== undefined
-        ? { description: params.input.description }
-        : {}),
-      ...(params.input.category !== undefined ? { category: params.input.category } : {}),
-      ...(params.input.unit !== undefined ? { unit: params.input.unit } : {}),
-      ...(params.input.isActive !== undefined ? { isActive: params.input.isActive } : {}),
-    },
+    data:
+      product.scope === ProductScope.LOCAL
+        ? { isActive: params.input.isActive }
+        : {
+            ...(params.input.name !== undefined ? { name: params.input.name } : {}),
+            ...(params.input.slug !== undefined ? { slug: params.input.slug } : {}),
+            ...(params.input.description !== undefined
+              ? { description: params.input.description }
+              : {}),
+            ...(params.input.category !== undefined ? { category: params.input.category } : {}),
+            ...(params.input.unit !== undefined ? { unit: params.input.unit } : {}),
+            ...(params.input.isActive !== undefined ? { isActive: params.input.isActive } : {}),
+          },
+    include: { ownerProvider: { select: { businessName: true } } },
   });
 
   const action =
@@ -189,7 +241,10 @@ export async function updateAdminProduct(params: {
     entityId: updated.id,
     userId: params.adminUserId,
     ipAddress: params.ipAddress,
-    details: { ...params.input },
+    details: {
+      ...params.input,
+      ...(product.scope === ProductScope.LOCAL ? { scope: "LOCAL" } : {}),
+    },
   });
 
   return serializeProduct(updated);

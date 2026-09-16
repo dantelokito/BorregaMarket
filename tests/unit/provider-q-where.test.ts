@@ -12,6 +12,7 @@ describe("provider q union (US-EXPLORE-06)", () => {
       };
     };
     expect(productSome.providerProducts.some.isAvailable).toBe(true);
+    expect((productSome.providerProducts.some as { archivedAt: null }).archivedAt).toBeNull();
     expect(productSome.providerProducts.some.product.isActive).toBe(true);
     expect(productSome.providerProducts.some.product.OR).toHaveLength(2);
   });

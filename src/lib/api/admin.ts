@@ -35,13 +35,22 @@ export async function updateProviderFlags(
 }
 
 export async function getAdminProducts(
-  query: { q?: string; isActive?: boolean; page?: number; limit?: number } = {}
+  query: {
+    q?: string;
+    isActive?: boolean;
+    page?: number;
+    limit?: number;
+    scope?: "GLOBAL" | "LOCAL";
+    ownerProviderId?: string;
+  } = {}
 ) {
   const qs = buildQuery({
     q: query.q,
     isActive: query.isActive === undefined ? undefined : String(query.isActive),
     page: query.page,
     limit: query.limit,
+    scope: query.scope,
+    ownerProviderId: query.ownerProviderId,
   });
   return apiGet<AdminProduct[]>(`/api/admin/products${qs}`);
 }

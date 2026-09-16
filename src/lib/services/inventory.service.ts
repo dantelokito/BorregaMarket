@@ -13,6 +13,12 @@ import { buildMeta } from "@/lib/services/pagination";
 import { toDecimal } from "@/lib/money";
 import { convertQtyToCatalog, formatOnHand } from "@/lib/inventory/convert-qty";
 import { computeInventoryMetrics } from "@/lib/inventory/metrics";
+import { effectiveSaleUnit } from "@/lib/catalog/sellable";
+import {
+  assertCajaFactor,
+  assertUnitFactorChangeAllowed,
+  OfferArchivedError,
+} from "@/lib/catalog/offer";
 import type { InventoryEntryInput, PatchInventoryInput } from "@/lib/validators/inventory";
 
 export class InventoryValidationError extends Error {
@@ -71,14 +77,15 @@ export async function sumReservedByProductIds(
       quantity: true,
       unitOfMeasure: true,
       product: { select: { unit: true } },
-      providerProduct: { select: { product: { select: { unit: true } } } },
+      providerProduct: { select: { saleUnit: true, product: { select: { unit: true } } } },
     },
   });
 
   for (const item of items) {
     if (!item.providerProductId) continue;
-    const unit =
-      item.providerProduct?.product.unit ?? item.product?.unit ?? ProductUnit.KG;
+    const unit = item.providerProduct
+      ? effectiveSaleUnit(item.providerProduct.saleUnit, item.providerProduct.product.unit)
+      : item.product?.unit ?? ProductUnit.KG;
     const qty = convertQtyToCatalog(unit, item.unitOfMeasure, item.quantity);
     const prev = totals.get(item.providerProductId) ?? new Prisma.Decimal(0);
     totals.set(item.providerProductId, prev.plus(qty));
@@ -97,6 +104,8 @@ function serializeItem(
     alertThresholdPercent: number;
     alertEnabled: boolean;
     boxContentFactor: Prisma.Decimal | null;
+    saleUnit: ProductUnit | null;
+    archivedAt: Date | null;
     product: { name: string; unit: ProductUnit; imageUrl: string | null };
   },
   reserved: Prisma.Decimal
@@ -108,11 +117,15 @@ function serializeItem(
     alertThresholdPercent: row.alertThresholdPercent,
     alertEnabled: row.alertEnabled,
   });
+  const effective = effectiveSaleUnit(row.saleUnit, row.product.unit);
   return {
     providerProductId: row.id,
     productId: row.productId,
     name: row.product.name,
-    unit: row.product.unit,
+    unit: effective,
+    masterUnit: row.product.unit,
+    saleUnit: row.saleUnit,
+    effectiveSaleUnit: effective,
     isAvailable: row.isAvailable,
     imageUrl: row.imageUrl ?? row.product.imageUrl,
     ...metrics,
@@ -128,7 +141,7 @@ export async function listInventory(params: {
   skip: number;
 }) {
   await requireOwnedProvider(params.userId, params.providerId);
-  const where = { providerId: params.providerId };
+  const where = { providerId: params.providerId, archivedAt: null };
   const [total, rows] = await Promise.all([
     prisma.providerProduct.count({ where }),
     prisma.providerProduct.findMany({
@@ -169,7 +182,32 @@ export async function patchInventoryItem(params: {
   input: PatchInventoryInput;
 }) {
   await requireOwnedProvider(params.userId, params.providerId);
-  await loadBranchProduct(params.providerId, params.providerProductId);
+  const current = await loadBranchProduct(params.providerId, params.providerProductId);
+  const reservedMap = await sumReservedByProductIds(params.providerId, [current.id]);
+  const reserved = reservedMap.get(current.id) ?? new Prisma.Decimal(0);
+
+  const factorChanged =
+    params.input.boxContentFactor !== undefined &&
+    String(params.input.boxContentFactor ?? "") !==
+      String(current.boxContentFactor ?? "");
+
+  const nextFactor =
+    params.input.boxContentFactor === undefined
+      ? current.boxContentFactor
+      : params.input.boxContentFactor === null
+        ? null
+        : toDecimal(params.input.boxContentFactor);
+
+  const nextUnit = effectiveSaleUnit(current.saleUnit, current.product.unit);
+  if (factorChanged) {
+    assertCajaFactor(nextUnit, nextFactor);
+  }
+  const { discardOnHand } = assertUnitFactorChangeAllowed({
+    reserved,
+    onHand: current.onHand,
+    unitOrFactorChanged: factorChanged,
+    confirmDiscard: params.input.confirmDiscard,
+  });
 
   const updated = await prisma.providerProduct.update({
     where: { id: params.providerProductId },
@@ -189,18 +227,14 @@ export async function patchInventoryItem(params: {
         ? { alertEnabled: params.input.alertEnabled }
         : {}),
       ...(params.input.boxContentFactor !== undefined
-        ? {
-            boxContentFactor:
-              params.input.boxContentFactor === null
-                ? null
-                : toDecimal(params.input.boxContentFactor),
-          }
+        ? { boxContentFactor: nextFactor }
         : {}),
+      ...(discardOnHand ? { onHand: 0 } : {}),
     },
     include: { product: true },
   });
-  const reserved = await sumReservedByProductIds(params.providerId, [updated.id]);
-  return serializeItem(updated, reserved.get(updated.id) ?? new Prisma.Decimal(0));
+  const reservedAfter = await sumReservedByProductIds(params.providerId, [updated.id]);
+  return serializeItem(updated, reservedAfter.get(updated.id) ?? new Prisma.Decimal(0));
 }
 
 export async function addInventoryEntry(params: {
@@ -211,6 +245,9 @@ export async function addInventoryEntry(params: {
 }) {
   await requireOwnedProvider(params.userId, params.providerId);
   const row = await loadBranchProduct(params.providerId, params.providerProductId);
+  if (row.archivedAt) {
+    throw new OfferArchivedError();
+  }
   const qty = toDecimal(params.input.quantity);
   let delta = qty;
   if (params.input.receiveAs === "BOX") {
@@ -226,13 +263,27 @@ export async function addInventoryEntry(params: {
   }
   delta = delta.toDecimalPlaces(3, Prisma.Decimal.ROUND_HALF_EVEN);
 
-  const updated = await prisma.providerProduct.update({
-    where: { id: row.id },
-    data: { onHand: { increment: delta } },
-    include: { product: true },
+  const updated = await prisma.$transaction(async (tx) => {
+    const entry = await tx.inventoryEntry.create({
+      data: {
+        providerProductId: row.id,
+        quantity: qty,
+        receiveAs: params.input.receiveAs ?? "CATALOG",
+        appliedDelta: delta,
+      },
+    });
+    const next = await tx.providerProduct.update({
+      where: { id: row.id },
+      data: { onHand: { increment: delta } },
+      include: { product: true },
+    });
+    return { next, lastEntryId: entry.id };
   });
-  const reserved = await sumReservedByProductIds(params.providerId, [updated.id]);
-  return serializeItem(updated, reserved.get(updated.id) ?? new Prisma.Decimal(0));
+  const reserved = await sumReservedByProductIds(params.providerId, [updated.next.id]);
+  return {
+    ...serializeItem(updated.next, reserved.get(updated.next.id) ?? new Prisma.Decimal(0)),
+    lastEntryId: updated.lastEntryId,
+  };
 }
 
 export async function decrementOnHandForLines(
@@ -259,7 +310,7 @@ export async function decrementOnHandForLines(
   for (const line of catalogLines) {
     const pp = byId.get(line.providerProductId!);
     if (!pp) continue;
-    const unit = line.productUnit ?? pp.product.unit;
+    const unit = line.productUnit ?? effectiveSaleUnit(pp.saleUnit, pp.product.unit);
     const qty = convertQtyToCatalog(unit, line.unitOfMeasure, line.quantity);
     deltas.set(pp.id, (deltas.get(pp.id) ?? new Prisma.Decimal(0)).plus(qty));
   }

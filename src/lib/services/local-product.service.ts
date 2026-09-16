@@ -1,10 +1,17 @@
-import { AuditAction, ProductScope, SystemModule } from "@prisma/client";
+import { AuditAction, ProductScope, Prisma, SystemModule } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { assertRateLimit } from "@/lib/rate-limit/token-bucket";
 import { slugify } from "@/lib/validation/plain-text";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
 import { findOwnedProvider } from "@/lib/providers/owned-provider";
+import { toDecimal } from "@/lib/money";
+import {
+  assertCajaFactor,
+  assertUnitFactorChangeAllowed,
+  insertPriceHistory,
+} from "@/lib/catalog/offer";
+import { sumReservedByProductIds } from "@/lib/services/inventory.service";
 import type {
   CreateLocalProductInput,
   PatchLocalProductInput,
@@ -101,6 +108,11 @@ export async function createLocalProduct(params: {
   if (section.providerId !== provider.id) throw new CatalogForbiddenError();
 
   const slug = await uniqueLocalSlug(provider.id, params.input.name);
+  const factor =
+    params.input.boxContentFactor === undefined
+      ? null
+      : toDecimal(params.input.boxContentFactor);
+  assertCajaFactor(params.input.unit, factor);
 
   const created = await prisma.$transaction(async (tx) => {
     const product = await tx.product.create({
@@ -119,11 +131,19 @@ export async function createLocalProduct(params: {
       data: {
         providerId: provider.id,
         productId: product.id,
-        price: params.input.price,
+        price: toDecimal(params.input.price),
         isAvailable: params.input.isAvailable ?? true,
         sectionId: section.id,
+        saleUnit: params.input.unit,
+        boxContentFactor: factor,
       },
       include: { product: true },
+    });
+    await insertPriceHistory(tx, {
+      providerProductId: pp.id,
+      price: pp.price,
+      previousPrice: null,
+      changedByUserId: params.userId,
     });
     return pp;
   });
@@ -150,11 +170,21 @@ export async function updateLocalProduct(params: {
   const provider = await findOwnedProvider(params.userId, params.providerId);
   if (!provider) throw new ProviderNotFoundError("Perfil de proveedor no encontrado");
 
-  const row = await prisma.providerProduct.findUnique({
+  let row = await prisma.providerProduct.findUnique({
     where: { id: params.providerProductId },
     include: { product: true },
   });
-  if (!row) throw new CatalogNotFoundError("Producto no encontrado");
+  if (!row) {
+    const product = await prisma.product.findUnique({ where: { id: params.providerProductId } });
+    if (!product) throw new CatalogNotFoundError("Producto no encontrado");
+    if (product.scope !== ProductScope.LOCAL) throw new WrongProductRouteError();
+    if (product.ownerProviderId !== provider.id) throw new CatalogForbiddenError();
+    row = await prisma.providerProduct.findUnique({
+      where: { providerId_productId: { providerId: provider.id, productId: product.id } },
+      include: { product: true },
+    });
+    if (!row) throw new CatalogNotFoundError("Producto no encontrado");
+  }
   if (row.providerId !== provider.id) throw new CatalogForbiddenError();
   if (row.product.scope !== ProductScope.LOCAL) throw new WrongProductRouteError();
 
@@ -180,6 +210,37 @@ export async function updateLocalProduct(params: {
     if (!clash) nextSlug = candidate;
   }
 
+  const nextMasterUnit = params.input.unit ?? row.product.unit;
+  const nextSaleUnit =
+    params.input.saleUnit !== undefined
+      ? params.input.saleUnit
+      : params.input.unit !== undefined
+        ? params.input.unit
+        : row.saleUnit;
+  const nextFactor =
+    params.input.boxContentFactor !== undefined
+      ? params.input.boxContentFactor === null
+        ? null
+        : toDecimal(params.input.boxContentFactor)
+      : row.boxContentFactor;
+  const effective = nextSaleUnit ?? nextMasterUnit;
+  assertCajaFactor(effective, nextFactor);
+
+  const unitOrFactorChanged =
+    (params.input.unit !== undefined && params.input.unit !== row.product.unit) ||
+    (params.input.saleUnit !== undefined && params.input.saleUnit !== row.saleUnit) ||
+    (params.input.boxContentFactor !== undefined &&
+      String(params.input.boxContentFactor ?? "") !== String(row.boxContentFactor ?? ""));
+
+  const reserved =
+    (await sumReservedByProductIds(provider.id, [row.id])).get(row.id) ?? new Prisma.Decimal(0);
+  const { discardOnHand } = assertUnitFactorChangeAllowed({
+    reserved,
+    onHand: row.onHand,
+    unitOrFactorChanged,
+    confirmDiscard: params.input.confirmDiscard,
+  });
+
   const updated = await prisma.$transaction(async (tx) => {
     await tx.product.update({
       where: { id: row.productId },
@@ -192,17 +253,29 @@ export async function updateLocalProduct(params: {
           : {}),
       },
     });
-    return tx.providerProduct.update({
+    const next = await tx.providerProduct.update({
       where: { id: row.id },
       data: {
-        ...(params.input.price !== undefined ? { price: params.input.price } : {}),
+        ...(params.input.price !== undefined ? { price: toDecimal(params.input.price) } : {}),
         ...(params.input.isAvailable !== undefined
           ? { isAvailable: params.input.isAvailable }
           : {}),
         ...(params.input.sectionId !== undefined ? { sectionId: params.input.sectionId } : {}),
+        saleUnit: nextSaleUnit,
+        ...(params.input.boxContentFactor !== undefined ? { boxContentFactor: nextFactor } : {}),
+        ...(discardOnHand ? { onHand: 0 } : {}),
       },
       include: { product: true },
     });
+    if (params.input.price !== undefined && !toDecimal(params.input.price).eq(row.price)) {
+      await insertPriceHistory(tx, {
+        providerProductId: next.id,
+        price: next.price,
+        previousPrice: row.price,
+        changedByUserId: params.userId,
+      });
+    }
+    return next;
   });
 
   const action =

@@ -1,7 +1,10 @@
 import type { FieldError } from "@/lib/api/response";
 
 export class ProductUnavailableError extends Error {
-  constructor(message = "Producto no disponible") {
+  details = [
+    { field: "providerProductId", message: "La oferta está oculta o inactiva" },
+  ];
+  constructor(message = "El producto ya no está disponible") {
     super(message);
     this.name = "ProductUnavailableError";
   }

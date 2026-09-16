@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { RateLimitError } from "@/lib/rate-limit/token-bucket";
 import { LastAdminError } from "@/lib/auth/assert-not-last-admin";
+import { PaginationValidationError } from "@/lib/services/pagination";
+import {
+  EncargarActiveError,
+  ConfirmDiscardRequiredError,
+  OfferArchivedError,
+} from "@/lib/catalog/offer";
 
 export interface FieldError {
   field: string;
@@ -60,6 +66,18 @@ export function handleRouteError(err: unknown) {
     return apiError(err.message, 429);
   }
   if (err instanceof LastAdminError) {
+    return apiError(err.message, 409, err.details());
+  }
+  if (err instanceof PaginationValidationError) {
+    return apiError(err.message, 400, err.details);
+  }
+  if (err instanceof EncargarActiveError) {
+    return apiError(err.message, 409, err.details());
+  }
+  if (err instanceof ConfirmDiscardRequiredError) {
+    return apiError(err.message, 400, err.details());
+  }
+  if (err instanceof OfferArchivedError) {
     return apiError(err.message, 409, err.details());
   }
   return apiError("Error interno", 500);

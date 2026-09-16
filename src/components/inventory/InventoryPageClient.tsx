@@ -92,7 +92,7 @@ export function InventoryPageClient() {
                       </div>
                     </td>
                     <td className="px-4 py-3 tabular-nums">
-                      {formatQty(parseQtyString(item.onHand))} {item.unit}
+                      {formatQty(parseQtyString(item.onHand))} {item.effectiveSaleUnit ?? item.unit}
                     </td>
                     <td className="px-4 py-3">
                       <InventoryCapacityBar fillPercent={item.fillPercent} />
@@ -132,7 +132,7 @@ export function InventoryPageClient() {
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{item.name}</p>
                     <p className="text-sm tabular-nums text-slate-600">
-                      {formatQty(parseQtyString(item.onHand))} {item.unit}
+                      {formatQty(parseQtyString(item.onHand))} {item.effectiveSaleUnit ?? item.unit}
                     </p>
                   </div>
                 </div>

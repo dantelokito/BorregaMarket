@@ -23,7 +23,7 @@ export function handleOrderRouteError(err: unknown): NextResponse {
     return apiError(err.message, err.status);
   }
   if (err instanceof ProductUnavailableError) {
-    return apiError(err.message, 409);
+    return apiError(err.message, 409, err.details);
   }
   if (err instanceof InvalidTransitionError) {
     return apiError(err.message, 409);

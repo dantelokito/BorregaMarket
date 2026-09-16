@@ -23,6 +23,9 @@ import { ActiveStoreEyebrow } from "@/components/provider/ActiveStoreEyebrow";
 
 export function ProveedorPageClient() {
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [archived, setArchived] = useState<CatalogItem[]>([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+  const [archivedError, setArchivedError] = useState("");
   const [sections, setSections] = useState<ProviderSection[]>([]);
   const [businessName, setBusinessName] = useState("");
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -48,6 +51,17 @@ export function ProveedorPageClient() {
     setCatalog(products.catalog);
     setSections(sectionsRes.data);
     setPosShowImages(business.posShowImages !== false);
+    setArchivedLoading(true);
+    setArchivedError("");
+    try {
+      const tray = await getMyProducts({ archived: true });
+      setArchived(tray.data.catalog);
+    } catch (err) {
+      setArchived([]);
+      setArchivedError(mapF10ApiError(err, "business"));
+    } finally {
+      setArchivedLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -149,6 +163,21 @@ export function ProveedorPageClient() {
             catalog={catalog}
             sections={sections}
             onReload={load}
+            archived={archived}
+            archivedLoading={archivedLoading}
+            archivedError={archivedError}
+            onReloadArchived={async () => {
+              setArchivedLoading(true);
+              setArchivedError("");
+              try {
+                const tray = await getMyProducts({ archived: true });
+                setArchived(tray.data.catalog);
+              } catch (err) {
+                setArchivedError(mapF10ApiError(err, "business"));
+              } finally {
+                setArchivedLoading(false);
+              }
+            }}
             posShowImages={posShowImages}
             posImagesBusy={posImagesBusy}
             posImagesError={posImagesError}

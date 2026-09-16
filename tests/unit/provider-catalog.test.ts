@@ -28,6 +28,7 @@ describe("sellableProviderProductWhere", () => {
   it("requires isAvailable and Product.isActive", () => {
     expect(sellableProviderProductWhere).toEqual({
       isAvailable: true,
+      archivedAt: null,
       product: { isActive: true },
     });
   });
@@ -79,6 +80,7 @@ describe("getProviderDetail", () => {
             unit: "KG",
             imageUrl: null,
           },
+          saleUnit: null,
         },
       ],
     });

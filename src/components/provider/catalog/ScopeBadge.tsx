@@ -1,6 +1,6 @@
 "use client";
 
-import { Store } from "lucide-react";
+import { Globe, Store } from "lucide-react";
 import type { ProductScope } from "@/lib/api/types";
 
 export function ScopeBadge({ scope }: { scope?: ProductScope }) {
@@ -8,9 +8,14 @@ export function ScopeBadge({ scope }: { scope?: ProductScope }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-800">
         <Store size={12} aria-hidden />
-        Solo este negocio
+        LOCAL
       </span>
     );
   }
-  return <span className="text-xs text-slate-500">Catálogo</span>;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-900">
+      <Globe size={12} aria-hidden />
+      GLOBAL
+    </span>
+  );
 }

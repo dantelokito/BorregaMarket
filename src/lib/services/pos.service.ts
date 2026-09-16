@@ -20,6 +20,7 @@ import {
   type OrderRecord,
 } from "@/lib/orders/serialize";
 import { decrementOnHandForLines } from "@/lib/services/inventory.service";
+import { effectiveSaleUnit } from "@/lib/catalog/sellable";
 import type { CreatePosSaleInput } from "@/lib/validators/order";
 import { resolveProviderByUserId } from "@/lib/services/order.service";
 
@@ -95,7 +96,7 @@ export async function createPosSale(params: {
     if (pp.providerId !== provider.id) {
       throw new OrderForbiddenError();
     }
-    if (!pp.isAvailable || !pp.product.isActive) {
+    if (!pp.isAvailable || !pp.product.isActive || pp.archivedAt) {
       throw new ProductUnavailableError();
     }
     const unitPrice = toMoney(pp.price);
@@ -108,7 +109,7 @@ export async function createPosSale(params: {
       unitOfMeasure: item.unitOfMeasure,
       unitPrice,
       subtotal: lineSubtotal(unitPrice, quantity),
-      productUnit: pp.product.unit,
+      productUnit: effectiveSaleUnit(pp.saleUnit, pp.product.unit),
     };
   });
 

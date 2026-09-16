@@ -12,6 +12,7 @@ const { prismaMock } = vi.hoisted(() => ({
       update: vi.fn(),
     },
     orderItem: { findMany: vi.fn() },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -44,6 +45,8 @@ describe("inventory.service", () => {
         alertThresholdPercent: 10,
         alertEnabled: true,
         boxContentFactor: new Decimal("10"),
+        saleUnit: null,
+        archivedAt: null,
         product: { name: "Mango Ataulfo", unit: "KG", imageUrl: null },
       },
     ]);
@@ -88,7 +91,18 @@ describe("inventory.service", () => {
       alertThresholdPercent: 10,
       alertEnabled: true,
       boxContentFactor: new Decimal("10"),
+      saleUnit: null,
+      archivedAt: null,
       product: { name: "Mango", unit: "KG", imageUrl: null },
+    });
+    prismaMock.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => {
+      const tx = {
+        inventoryEntry: { create: vi.fn().mockResolvedValue({ id: "ent1" }) },
+        providerProduct: {
+          update: prismaMock.providerProduct.update,
+        },
+      };
+      return cb(tx);
     });
     prismaMock.providerProduct.update.mockResolvedValue({
       id: "pp1",
@@ -100,6 +114,8 @@ describe("inventory.service", () => {
       alertThresholdPercent: 10,
       alertEnabled: true,
       boxContentFactor: new Decimal("10"),
+      saleUnit: null,
+      archivedAt: null,
       product: { name: "Mango", unit: "KG", imageUrl: null },
     });
 
@@ -115,5 +131,7 @@ describe("inventory.service", () => {
       })
     );
     expect(row.onHand).toBe("21.000");
+    expect(row.lastEntryId).toBe("ent1");
+    expect(row.effectiveSaleUnit).toBe("KG");
   });
 });

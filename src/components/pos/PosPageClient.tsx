@@ -218,7 +218,7 @@ export function PosPageClient() {
       setEditing(null);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setChargeError("Ese producto ya no está a la venta");
+        setChargeError("El producto ya no está disponible");
         void load();
       } else if (err instanceof ApiError) setChargeError(err.message || "No pudimos cobrar la venta");
       else setChargeError("No pudimos cobrar la venta");

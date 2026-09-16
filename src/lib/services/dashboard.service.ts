@@ -63,7 +63,6 @@ function topProductsQuery(providerId: string, from: Date, to: Date) {
       AND o.status <> 'CANCELLED'::"OrderStatus"
       AND o.created_at >= ${from}
       AND o.created_at < ${to}
-      AND (oi.provider_product_id IS NULL OR pp.is_available = true)
     GROUP BY oi.provider_product_id
     ORDER BY SUM(oi.subtotal) DESC
     LIMIT 5

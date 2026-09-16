@@ -10,7 +10,10 @@ import {
   InventoryValidationError,
   patchInventoryItem,
 } from "@/lib/services/inventory.service";
-import { patchInventorySchema } from "@/lib/validators/inventory";
+import {
+  ConfirmDiscardRequiredError,
+  EncargarActiveError,
+} from "@/lib/catalog/offer";
 
 export async function GET(
   request: NextRequest,
@@ -52,6 +55,12 @@ export async function PATCH(
     if (err instanceof AuthError) return apiError(err.message, err.status);
     if (err instanceof ProviderNotFoundError) return apiError(err.message, 404);
     if (err instanceof CatalogForbiddenError) return apiError(err.message, 403);
+    if (err instanceof EncargarActiveError) {
+      return apiError(err.message, 409, err.details());
+    }
+    if (err instanceof ConfirmDiscardRequiredError) {
+      return apiError(err.message, 400, err.details());
+    }
     if (err instanceof InventoryValidationError) {
       return apiError(err.message, 400, err.details);
     }

@@ -23,6 +23,8 @@ import { DateRangeFields } from "./DateRangeFields";
 import { ProductFilterChecklist } from "./ProductFilterChecklist";
 import { ProductSalesTable } from "./ProductSalesTable";
 import { mapF10ApiError } from "@/lib/ui/f10-errors";
+import { ReportsViewTabs } from "./ReportsViewTabs";
+import { InventoryReportsPanel } from "./InventoryReportsPanel";
 
 function parseYmd(raw: string | null): string | null {
   return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
@@ -44,11 +46,13 @@ export function ReportsView() {
   const [error, setError] = useState("");
   const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [filterOptions, setFilterOptions] = useState<{ id: string; name: string }[]>([]);
+  const tab = searchParams.get("tab") === "inventario" ? "inventario" : "ventas";
 
   const pushQuery = useCallback(
     (nextFrom: string, nextTo: string, nextIds: string[]) => {
       const params = new URLSearchParams();
       params.set("view", "reportes");
+      if (tab === "inventario") params.set("tab", "inventario");
       params.set("from", nextFrom);
       params.set("to", nextTo);
       params.delete("grain");
@@ -122,6 +126,19 @@ export function ReportsView() {
 
   return (
     <div>
+      <ReportsViewTabs
+        current={tab}
+        onChange={(next) => {
+          const params = new URLSearchParams(searchParams.toString());
+          params.set("view", "reportes");
+          if (next === "inventario") params.set("tab", "inventario");
+          else params.delete("tab");
+          router.replace(`/proveedor/dashboard?${params.toString()}`, { scroll: false });
+        }}
+      />
+      {tab === "inventario" ? <InventoryReportsPanel /> : null}
+      {tab === "ventas" ? (
+      <>
       <div className="no-print mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex w-full flex-col gap-3 sm:max-w-xl">
           <div>
@@ -227,6 +244,8 @@ export function ReportsView() {
           </>
         )}
       </div>
+      </>
+      ) : null}
     </div>
   );
 }

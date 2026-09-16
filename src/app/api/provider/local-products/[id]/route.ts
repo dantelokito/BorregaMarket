@@ -11,6 +11,12 @@ import {
   updateLocalProduct,
 } from "@/lib/services/local-product.service";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+import { methodNotAllowedDeleteProduct } from "@/lib/api/method-not-allowed";
+import {
+  ConfirmDiscardRequiredError,
+  EncargarActiveError,
+  OfferValidationError,
+} from "@/lib/catalog/offer";
 
 export async function PATCH(
   request: NextRequest,
@@ -41,9 +47,22 @@ export async function PATCH(
     if (err instanceof CatalogNotFoundError || err instanceof ProviderNotFoundError) {
       return apiError(err.message, 404);
     }
+    if (err instanceof EncargarActiveError) {
+      return apiError(err.message, 409, err.details());
+    }
+    if (err instanceof ConfirmDiscardRequiredError) {
+      return apiError(err.message, 400, err.details());
+    }
+    if (err instanceof OfferValidationError) {
+      return apiError(err.message, 400, err.details);
+    }
     if (err instanceof z.ZodError) {
       return apiError("Validation failed", 400, fromZodError(err));
     }
     return handleRouteError(err);
   }
+}
+
+export async function DELETE() {
+  return methodNotAllowedDeleteProduct("PATCH", "provider");
 }

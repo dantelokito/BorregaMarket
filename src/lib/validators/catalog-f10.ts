@@ -19,6 +19,8 @@ export const adminProductListQuerySchema = z.object({
       if (value === undefined) return undefined;
       return value === "true" || value === "1";
     }),
+  scope: z.enum(["GLOBAL", "LOCAL"]).optional(),
+  ownerProviderId: z.string().cuid().optional(),
 });
 
 export const createAdminProductSchema = z
@@ -59,16 +61,26 @@ export const patchAdminProductSchema = z
 export type CreateAdminProductInput = z.infer<typeof createAdminProductSchema>;
 export type PatchAdminProductInput = z.infer<typeof patchAdminProductSchema>;
 
+const moneyAmount = z
+  .union([z.string(), z.number()])
+  .transform((value) => String(value).trim())
+  .refine((value) => /^\d+(\.\d{1,2})?$/.test(value), { message: "Máximo 2 decimales" })
+  .refine((value) => Number(value) >= 0, { message: "El precio debe ser ≥ 0" });
+
 export const createLocalProductSchema = z
   .object({
     name: noHtmlName(80),
     unit: z.nativeEnum(ProductUnit),
-    price: z.number().min(0).refine((n) => Number.isFinite(n) && Math.round(n * 100) === n * 100, {
-      message: "Máximo 2 decimales",
-    }),
+    price: z.union([
+      z.number().min(0).refine((n) => Number.isFinite(n) && Math.round(n * 100) === n * 100, {
+        message: "Máximo 2 decimales",
+      }),
+      moneyAmount,
+    ]),
     sectionId: z.string().cuid(),
     isAvailable: z.boolean().optional(),
     description: z.string().trim().max(500).nullable().optional(),
+    boxContentFactor: z.union([z.string(), z.number()]).optional(),
   })
   .strict();
 
@@ -76,20 +88,51 @@ export const patchLocalProductSchema = z
   .object({
     name: noHtmlName(80).optional(),
     unit: z.nativeEnum(ProductUnit).optional(),
+    saleUnit: z.nativeEnum(ProductUnit).nullable().optional(),
     price: z
-      .number()
-      .min(0)
-      .refine((n) => Number.isFinite(n) && Math.round(n * 100) === n * 100, {
-        message: "Máximo 2 decimales",
-      })
+      .union([
+        z.number().min(0).refine((n) => Number.isFinite(n) && Math.round(n * 100) === n * 100, {
+          message: "Máximo 2 decimales",
+        }),
+        moneyAmount,
+      ])
       .optional(),
     sectionId: z.string().cuid().optional(),
     isAvailable: z.boolean().optional(),
     description: z.string().trim().max(500).nullable().optional(),
+    boxContentFactor: z.union([z.string(), z.number(), z.null()]).optional(),
+    confirmDiscard: z.boolean().optional(),
   })
   .strict()
   .refine((data) => Object.keys(data).length > 0, {
     message: "Indica al menos un campo",
+  });
+
+export const patchOfferByProductSchema = z
+  .object({
+    price: moneyAmount.optional(),
+    saleUnit: z.nativeEnum(ProductUnit).nullable().optional(),
+    boxContentFactor: z.union([z.string(), z.number(), z.null()]).optional(),
+    sectionId: z.string().cuid().nullable().optional(),
+    isAvailable: z.boolean().optional(),
+    confirmDiscard: z.boolean().optional(),
+    name: z.never().optional(),
+    unit: z.never().optional(),
+  })
+  .strict();
+
+export const patchOfferPriceSchema = z
+  .object({
+    price: moneyAmount,
+  })
+  .strict();
+
+export const archivedQuerySchema = z
+  .enum(["1", "true", "0", "false"])
+  .optional()
+  .transform((value) => {
+    if (value === undefined) return undefined;
+    return value === "1" || value === "true";
   });
 
 export const createSectionSchema = z

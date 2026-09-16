@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getGlobalProviderReport } from "@/lib/api/provider-f11";
+import { getGlobalInventoryReport } from "@/lib/api/provider-f13";
 import { ApiError } from "@/lib/api/client";
-import type { GlobalProviderReport } from "@/lib/api/types";
+import type { GlobalInventoryReport, GlobalProviderReport } from "@/lib/api/types";
 import { ymdInTimeZone } from "@/lib/timezone";
 import { currentMonthShortcut, monthShortcutRange, validateDateRange } from "@/lib/reports/date-range";
 import { formatCurrency } from "@/lib/format";
@@ -16,6 +17,7 @@ import { DateRangeFields } from "@/components/provider/reports/DateRangeFields";
 import { BranchBreakdownTable } from "@/components/provider/reports/BranchBreakdownTable";
 import { useProviderScope } from "@/hooks/useProviderScope";
 import { ActiveStoreEyebrow } from "@/components/provider/ActiveStoreEyebrow";
+import { GlobalOnHandBlock } from "@/components/provider/reports/GlobalOnHandBlock";
 
 function parseYmd(raw: string | null): string | null {
   return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
@@ -35,6 +37,9 @@ export function GlobalReportsPageClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState<string | undefined>();
+  const [inv, setInv] = useState<GlobalInventoryReport | null>(null);
+  const [invLoading, setInvLoading] = useState(false);
+  const [invError, setInvError] = useState("");
 
   useEffect(() => {
     if (scopeStatus === "loading") return;
@@ -83,10 +88,26 @@ export function GlobalReportsPageClient() {
     }
   }, [from, to, rangeError, showGlobalReports, providerCount]);
 
+  const loadInv = useCallback(async () => {
+    if (!showGlobalReports) return;
+    setInvLoading(true);
+    setInvError("");
+    try {
+      const { data } = await getGlobalInventoryReport();
+      setInv(data);
+    } catch (err) {
+      setInv(null);
+      setInvError(err instanceof ApiError ? err.message : "No se pudo cargar el inventario");
+    } finally {
+      setInvLoading(false);
+    }
+  }, [showGlobalReports]);
+
   useEffect(() => {
     if (scopeStatus !== "ready" || !showGlobalReports) return;
     void load();
-  }, [load, scopeStatus, showGlobalReports]);
+    void loadInv();
+  }, [load, loadInv, scopeStatus, showGlobalReports]);
 
   if (scopeStatus === "loading" || !showGlobalReports) {
     return (
@@ -175,6 +196,12 @@ export function GlobalReportsPageClient() {
             totalGmv={report.kpis.gmv}
             totalOrders={report.kpis.orderCount}
             totalTicket={report.kpis.avgTicket}
+          />
+          <GlobalOnHandBlock
+            report={inv}
+            loading={invLoading}
+            error={invError}
+            onRetry={() => void loadInv()}
           />
         </>
       ) : null}

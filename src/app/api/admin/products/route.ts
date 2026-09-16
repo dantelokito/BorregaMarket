@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { SystemModule } from "@prisma/client";
+import { ProductScope, SystemModule } from "@prisma/client";
 import { AuthError } from "@/lib/auth/session";
 import { requireAdminModule } from "@/lib/auth/require-admin-module";
 import { ok, paginated, apiError, fromZodError, handleRouteError } from "@/lib/api/response";
@@ -9,10 +9,12 @@ import {
   createAdminProductSchema,
 } from "@/lib/validators/catalog-f10";
 import {
+  AdminQueryError,
   createAdminProduct,
   listAdminProducts,
   ProductConflictError,
 } from "@/lib/services/admin-product.service";
+import { PaginationValidationError } from "@/lib/services/pagination";
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,16 +23,23 @@ export async function GET(request: NextRequest) {
     const query = adminProductListQuerySchema.parse({
       q: searchParams.get("q") ?? undefined,
       isActive: searchParams.get("isActive") ?? undefined,
+      scope: searchParams.get("scope") ?? undefined,
+      ownerProviderId: searchParams.get("ownerProviderId") ?? undefined,
     });
     const result = await listAdminProducts({
       searchParams,
       q: query.q,
       isActive: query.isActive,
+      scope: query.scope as ProductScope | undefined,
+      ownerProviderId: query.ownerProviderId,
     });
     return paginated(result.data, result.meta);
   } catch (err) {
     if (err instanceof AuthError) {
       return apiError(err.message, err.status);
+    }
+    if (err instanceof PaginationValidationError || err instanceof AdminQueryError) {
+      return apiError(err.message, 400, err.details);
     }
     if (err instanceof z.ZodError) {
       return apiError("Validation failed", 400, fromZodError(err));

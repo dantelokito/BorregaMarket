@@ -5,17 +5,26 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScopeBadge } from "./ScopeBadge";
-import { ProductImageDropzone } from "./ProductImageDropzone";
-import type { CatalogItem, ProviderSection } from "@/lib/api/types";
+import { OfferUnitSelect, BoxFactorField } from "./OfferUnitSelect";
 import {
-  createLocalProduct,
-  patchLocalProduct,
-  uploadProviderProductImage,
-} from "@/lib/api/provider-panel";
+  ActiveOrderBlockAlert,
+  UnitChangeConfirmDialog,
+} from "./UnitChangeConfirmDialog";
+import type { CatalogItem, ProviderSection } from "@/lib/api/types";
+import { createLocalProduct, patchLocalProduct } from "@/lib/api/provider-panel";
+import { patchOfferByProduct } from "@/lib/api/provider-f13";
 import { ApiError } from "@/lib/api/client";
 import { mapF10ApiError } from "@/lib/ui/f10-errors";
-
-const UNITS = ["KG", "PIEZA"] as const;
+import { offerPatchSchema } from "@/lib/validators/catalog-f13";
+import {
+  effectiveSaleUnit,
+  factorRequired,
+  isConfirmDiscardRequired,
+  isEncargarActiveError,
+  onHandIsNonZero,
+  reservedIsPositive,
+  unitOrFactorChanged,
+} from "@/lib/catalog/f13";
 
 export function ProductFormDrawer({
   open,
@@ -34,34 +43,37 @@ export function ProductFormDrawer({
   const dialogRef = useRef<HTMLDivElement>(null);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [unit, setUnit] = useState<(typeof UNITS)[number]>("KG");
+  const [saleUnit, setSaleUnit] = useState("KG");
+  const [factor, setFactor] = useState("");
   const [sectionId, setSectionId] = useState("");
   const [isAvailable, setIsAvailable] = useState(true);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [encargarOpen, setEncargarOpen] = useState(false);
 
-  const isEdit = Boolean(editing?.providerProductId && editing.scope === "LOCAL");
+  const isGlobalEdit = Boolean(editing && editing.scope !== "LOCAL");
+  const isLocalEdit = Boolean(editing && editing.scope === "LOCAL");
+  const isCreate = !editing;
 
   useEffect(() => {
     if (!open) return;
     setErrors({});
-    setPendingFile(null);
-    if (editing && editing.scope === "LOCAL") {
+    setDiscardOpen(false);
+    if (editing) {
       setName(editing.product.name);
       setPrice(editing.price != null ? String(editing.price) : "");
-      setUnit(editing.product.unit === "PIEZA" ? "PIEZA" : "KG");
+      setSaleUnit(effectiveSaleUnit(editing.saleUnit, editing.product.unit));
+      setFactor(editing.boxContentFactor ? String(Number(editing.boxContentFactor)) : "");
       setSectionId(editing.sectionId ?? sections[0]?.id ?? "");
       setIsAvailable(editing.isAvailable);
-      setImageUrl(editing.imageUrl ?? editing.product.imageUrl ?? null);
     } else {
       setName("");
       setPrice("");
-      setUnit("KG");
+      setSaleUnit("KG");
+      setFactor("");
       setSectionId(sections[0]?.id ?? "");
       setIsAvailable(true);
-      setImageUrl(null);
     }
   }, [open, editing, sections]);
 
@@ -84,63 +96,114 @@ export function ProductFormDrawer({
 
   if (!open) return null;
 
+  const caja = factorRequired(saleUnit);
+
   function validate(): boolean {
-    const next: Record<string, string> = {};
-    if (!name.trim()) next.name = "Indica un nombre";
-    const parsed = Number(price);
-    if (!Number.isFinite(parsed) || parsed < 0 || Math.round(parsed * 100) !== parsed * 100) {
-      next.price = "Indica un precio válido";
+    const parsed = offerPatchSchema.safeParse({
+      name: isGlobalEdit ? undefined : name.trim(),
+      price: isCreate || price !== "" ? price : undefined,
+      saleUnit,
+      boxContentFactor: caja ? factor : factor || null,
+      sectionId: isGlobalEdit ? sectionId || null : sectionId,
+      unit: isCreate || isLocalEdit ? saleUnit : undefined,
+    });
+    if (!parsed.success) {
+      const next: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const key = String(issue.path[0] ?? "form");
+        next[key] = issue.message;
+      }
+      if (!isGlobalEdit && !name.trim()) next.name = "Indica un nombre";
+      if ((isCreate || isLocalEdit) && !sectionId) next.sectionId = "Elige una sección";
+      setErrors(next);
+      return false;
     }
-    if (!sectionId) next.sectionId = "Elige una sección";
+    const next: Record<string, string> = {};
+    if (!isGlobalEdit && !name.trim()) next.name = "Indica un nombre";
+    if ((isCreate || isLocalEdit) && !sectionId) next.sectionId = "Elige una sección";
+    if (isCreate && (!price.trim() || Number(price) < 0)) next.price = "Indica un precio válido";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
 
-  async function handleSave() {
-    if (!validate()) return;
+  async function persist(confirmDiscard: boolean) {
     setSaving(true);
     try {
-      const payload = {
-        name: name.trim(),
-        unit,
-        price: Number(price),
-        sectionId,
-        isAvailable,
-      };
-      let providerProductId = editing?.providerProductId ?? null;
-      if (isEdit && providerProductId) {
-        await patchLocalProduct(providerProductId, payload);
-      } else {
-        const { data } = await createLocalProduct(payload);
-        providerProductId = data.providerProductId;
-      }
-      const file = pendingFile;
-      if (file && providerProductId) {
-        const { data } = await uploadProviderProductImage(providerProductId, file);
-        setImageUrl(data.url);
-        setPendingFile(null);
+      if (isCreate) {
+        await createLocalProduct({
+          name: name.trim(),
+          unit: saleUnit as "KG",
+          price: Number(price),
+          sectionId,
+          isAvailable,
+          boxContentFactor: caja ? factor : null,
+        });
+      } else if (isLocalEdit && editing) {
+        await patchLocalProduct(editing.product.id, {
+          name: name.trim(),
+          unit: saleUnit as "KG",
+          saleUnit: saleUnit as "KG",
+          price: price === "" ? undefined : Number(price),
+          sectionId: sectionId || undefined,
+          isAvailable,
+          boxContentFactor: caja ? factor : null,
+          confirmDiscard: confirmDiscard || undefined,
+        });
+      } else if (editing) {
+        await patchOfferByProduct(editing.product.id, {
+          price: price === "" ? undefined : Number(price).toFixed(2),
+          saleUnit,
+          boxContentFactor: caja ? factor : null,
+          sectionId: sectionId || null,
+          isAvailable,
+          confirmDiscard: confirmDiscard || undefined,
+        });
       }
       await onSaved();
       onClose();
     } catch (err) {
-      const field = err instanceof ApiError ? err.details?.[0]?.field : undefined;
-      setErrors({
-        [field && ["name", "price", "sectionId"].includes(field) ? field : "form"]:
-          mapF10ApiError(err, "business"),
-      });
+      if (err instanceof ApiError && isEncargarActiveError(err.status, err.details)) {
+        setEncargarOpen(true);
+      } else if (err instanceof ApiError && isConfirmDiscardRequired(err.status, err.details, err.message)) {
+        setDiscardOpen(true);
+      } else {
+        setErrors({ form: mapF10ApiError(err, "business") });
+      }
     } finally {
       setSaving(false);
     }
   }
 
+  async function handleSave() {
+    if (!validate()) return;
+    const unitChanged =
+      editing &&
+      unitOrFactorChanged({
+        prevSaleUnit: effectiveSaleUnit(editing.saleUnit, editing.product.unit),
+        nextSaleUnit: saleUnit,
+        prevFactor: editing.boxContentFactor,
+        nextFactor: caja ? factor : null,
+      });
+    if (editing && unitChanged && reservedIsPositive(editing.reserved)) {
+      setEncargarOpen(true);
+      return;
+    }
+    if (editing && unitChanged && onHandIsNonZero(editing.onHand)) {
+      setDiscardOpen(true);
+      return;
+    }
+    await persist(false);
+  }
+
+  const title = isGlobalEdit
+    ? `Editar oferta · ${editing?.product.name ?? ""}`
+    : isLocalEdit
+      ? "Editar producto (solo este negocio)"
+      : "Agregar producto (solo este negocio)";
+
   return (
     <div className="fixed inset-0 z-[80]">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/40"
-        aria-label="Cerrar"
-        onClick={onClose}
-      />
+      <button type="button" className="absolute inset-0 bg-black/40" aria-label="Cerrar" onClick={onClose} />
       <div
         ref={dialogRef}
         role="dialog"
@@ -151,10 +214,10 @@ export function ProductFormDrawer({
         <header className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
           <div>
             <h2 id={titleId} className="text-lg font-semibold text-slate-900">
-              Producto de tu frutería
+              {title}
             </h2>
             <div className="mt-1">
-              <ScopeBadge scope="LOCAL" />
+              <ScopeBadge scope={isGlobalEdit ? "GLOBAL" : "LOCAL"} />
             </div>
           </div>
           <button
@@ -168,47 +231,66 @@ export function ProductFormDrawer({
         </header>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <Input
-            label="Nombre"
-            name="local-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            error={errors.name}
-          />
-          <div className="grid grid-cols-2 gap-3">
+          {isGlobalEdit ? (
+            <>
+              <p className="text-sm text-slate-600">
+                Unidad y factor de TU frutería. No cambia el catálogo del administrador.
+              </p>
+              <p className="text-sm text-slate-500">
+                Maestro (solo lectura): {editing?.product.unit}
+              </p>
+            </>
+          ) : (
             <Input
-              label="Precio (MXN)"
+              label="Nombre"
+              name="local-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              error={errors.name}
+            />
+          )}
+          {(isCreate || isLocalEdit) && (
+            <Input
+              label="Precio de tu frutería"
               name="local-price"
               type="number"
               min="0"
               step="0.01"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              required
+              required={isCreate}
               error={errors.price}
             />
-            <div>
-              <label htmlFor="local-unit" className="mb-1 block text-sm font-medium">
-                Unidad
-              </label>
-              <select
-                id="local-unit"
-                value={unit}
-                onChange={(e) => setUnit(e.target.value as (typeof UNITS)[number])}
-                className="min-h-11 w-full rounded-lg border border-gray-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-              >
-                {UNITS.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          )}
+          {isGlobalEdit && (
+            <Input
+              label="Precio de tu frutería"
+              name="offer-price"
+              type="number"
+              min="0"
+              step="0.01"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              error={errors.price}
+            />
+          )}
+          <OfferUnitSelect
+            id="offer-unit"
+            value={saleUnit}
+            onChange={setSaleUnit}
+            label={isGlobalEdit ? "Unidad de tu oferta" : "Unidad"}
+          />
+          <BoxFactorField
+            id="offer-factor"
+            value={factor}
+            onChange={setFactor}
+            required={caja}
+            error={errors.boxContentFactor}
+          />
           <div>
             <label htmlFor="local-section" className="mb-1 block text-sm font-medium">
-              Sección
+              Sección {isCreate || isLocalEdit ? "*" : ""}
             </label>
             <select
               id="local-section"
@@ -231,18 +313,6 @@ export function ProductFormDrawer({
               </p>
             )}
           </div>
-          <ProductImageDropzone
-            currentUrl={imageUrl}
-            onUpload={async (file) => {
-              if (isEdit && editing?.providerProductId) {
-                const { data } = await uploadProviderProductImage(editing.providerProductId, file);
-                setImageUrl(data.url);
-                return data.url;
-              }
-              setPendingFile(file);
-              return URL.createObjectURL(file);
-            }}
-          />
           <button
             type="button"
             aria-pressed={isAvailable}
@@ -253,9 +323,6 @@ export function ProductFormDrawer({
           >
             {isAvailable ? "Activo" : "Inactivo"}
           </button>
-          <p className="text-sm text-slate-600">
-            Solo este negocio — no aparece en otras fruterías
-          </p>
           {errors.form && (
             <p className="text-sm text-red-600" role="alert">
               {errors.form}
@@ -263,7 +330,10 @@ export function ProductFormDrawer({
           )}
         </div>
 
-        <footer className="border-t border-gray-100 p-5">
+        <footer className="flex gap-2 border-t border-gray-100 p-5">
+          <Button type="button" variant="secondary" className="min-h-11 w-full" onClick={onClose}>
+            Cancelar
+          </Button>
           <Button
             type="button"
             onClick={() => void handleSave()}
@@ -271,10 +341,19 @@ export function ProductFormDrawer({
             loadingText="Guardando…"
             className="min-h-11 w-full"
           >
-            Guardar producto
+            {isGlobalEdit ? "Guardar oferta" : "Guardar producto"}
           </Button>
         </footer>
       </div>
+      <UnitChangeConfirmDialog
+        open={discardOpen}
+        onCancel={() => setDiscardOpen(false)}
+        onConfirm={() => {
+          setDiscardOpen(false);
+          void persist(true);
+        }}
+      />
+      <ActiveOrderBlockAlert open={encargarOpen} onClose={() => setEncargarOpen(false)} />
     </div>
   );
 }
