@@ -1,4 +1,4 @@
-import { Prisma, SystemModule, AuditAction } from "@prisma/client";
+import { Prisma, SystemModule, AuditAction, ProductUnit } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { buildMeta } from "@/lib/services/pagination";
@@ -93,7 +93,8 @@ function mapProviderCard(
     offersDelivery: boolean;
     providerProducts: Array<{
       price: Prisma.Decimal;
-      product: { name: string; unit: string; imageUrl: string | null };
+      saleUnit: ProductUnit | null;
+      product: { name: string; unit: ProductUnit; imageUrl: string | null };
     }>;
     _count: { providerProducts: number };
   },

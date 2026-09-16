@@ -81,6 +81,7 @@ export function InventorySkuSheet({
       alertEnabled: alertOn,
       boxContentFactor: factorPayload,
     };
+    if (!item) return;
     const prevFactor = item.boxContentFactor ?? null;
     const nextFactor = factorPayload === undefined ? prevFactor : factorPayload;
     const factorChanged = String(prevFactor ?? "") !== String(nextFactor ?? "");

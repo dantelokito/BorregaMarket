@@ -8,11 +8,15 @@ describe("provider q union (US-EXPLORE-06)", () => {
     expect(or).toHaveLength(3);
     const productSome = or?.[2] as {
       providerProducts: {
-        some: { isAvailable: boolean; product: { isActive: boolean; OR: unknown[] } };
+        some: {
+          isAvailable: boolean;
+          archivedAt: null;
+          product: { isActive: boolean; OR: unknown[] };
+        };
       };
     };
     expect(productSome.providerProducts.some.isAvailable).toBe(true);
-    expect((productSome.providerProducts.some as { archivedAt: null }).archivedAt).toBeNull();
+    expect(productSome.providerProducts.some.archivedAt).toBeNull();
     expect(productSome.providerProducts.some.product.isActive).toBe(true);
     expect(productSome.providerProducts.some.product.OR).toHaveLength(2);
   });

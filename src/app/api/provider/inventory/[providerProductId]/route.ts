@@ -14,6 +14,7 @@ import {
   ConfirmDiscardRequiredError,
   EncargarActiveError,
 } from "@/lib/catalog/offer";
+import { patchInventorySchema } from "@/lib/validators/inventory";
 
 export async function GET(
   request: NextRequest,
