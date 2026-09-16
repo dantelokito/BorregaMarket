@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 
 export const Decimal = Prisma.Decimal;
 
-type DecimalValue = Prisma.Decimal | string | number;
+export type DecimalValue = Prisma.Decimal | string | number;
 
 export function toDecimal(value: DecimalValue): Prisma.Decimal {
   return new Prisma.Decimal(value);

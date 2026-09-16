@@ -10,6 +10,7 @@ import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { formatMoney, lineSubtotal, sumMoney, toMoney, toQuantity } from "@/lib/money";
 import {
+  OrderForbiddenError,
   OrderValidationError,
   ProductUnavailableError,
 } from "@/lib/orders/errors";
@@ -18,6 +19,7 @@ import {
   serializeOrder,
   type OrderRecord,
 } from "@/lib/orders/serialize";
+import { decrementOnHandForLines } from "@/lib/services/inventory.service";
 import type { CreatePosSaleInput } from "@/lib/validators/order";
 import { resolveProviderByUserId } from "@/lib/services/order.service";
 
@@ -82,12 +84,16 @@ export async function createPosSale(params: {
         unitOfMeasure: item.unitOfMeasure,
         unitPrice,
         subtotal: lineSubtotal(unitPrice, quantity),
+        productUnit: undefined as undefined,
       };
     }
 
     const pp = byId.get(item.providerProductId!);
-    if (!pp || pp.providerId !== provider.id) {
+    if (!pp) {
       throw new ProductUnavailableError();
+    }
+    if (pp.providerId !== provider.id) {
+      throw new OrderForbiddenError();
     }
     if (!pp.isAvailable || !pp.product.isActive) {
       throw new ProductUnavailableError();
@@ -102,6 +108,7 @@ export async function createPosSale(params: {
       unitOfMeasure: item.unitOfMeasure,
       unitPrice,
       subtotal: lineSubtotal(unitPrice, quantity),
+      productUnit: pp.product.unit,
     };
   });
 
@@ -112,31 +119,44 @@ export async function createPosSale(params: {
 
   let created;
   try {
-    created = await prisma.order.create({
-      data: {
-        clientId: null,
-        customerName: params.input.customerName ?? null,
-        providerId: provider.id,
-        source: OrderSource.POS,
-        status: params.input.status,
-        paymentMethod: params.input.paymentMethod,
-        paidAt,
-        notes: null,
-        idempotencyKey: params.idempotencyKey,
-        total,
-        items: {
-          create: prepared.map((line) => ({
-            providerProductId: line.providerProductId,
-            productId: line.productId,
-            itemName: line.itemName,
-            quantity: line.quantity,
-            unitOfMeasure: line.unitOfMeasure,
-            unitPrice: line.unitPrice,
-            subtotal: line.subtotal,
-          })),
+    created = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.create({
+        data: {
+          clientId: null,
+          customerName: params.input.customerName ?? null,
+          providerId: provider.id,
+          source: OrderSource.POS,
+          status: params.input.status,
+          paymentMethod: params.input.paymentMethod,
+          paidAt,
+          notes: null,
+          idempotencyKey: params.idempotencyKey,
+          total,
+          items: {
+            create: prepared.map((line) => ({
+              providerProductId: line.providerProductId,
+              productId: line.productId,
+              itemName: line.itemName,
+              quantity: line.quantity,
+              unitOfMeasure: line.unitOfMeasure,
+              unitPrice: line.unitPrice,
+              subtotal: line.subtotal,
+            })),
+          },
         },
-      },
-      include: orderDetailInclude,
+        include: orderDetailInclude,
+      });
+      await decrementOnHandForLines(
+        tx,
+        provider.id,
+        prepared.map((line) => ({
+          providerProductId: line.providerProductId,
+          quantity: line.quantity,
+          unitOfMeasure: line.unitOfMeasure,
+          productUnit: line.productUnit,
+        }))
+      );
+      return order;
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {

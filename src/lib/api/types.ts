@@ -222,6 +222,7 @@ export interface ProviderBusiness {
   googleReviewsLocked?: boolean;
   primaryColor?: string | null;
   secondaryColor?: string | null;
+  posShowImages?: boolean;
 }
 
 export interface CatalogItem {
@@ -241,6 +242,12 @@ export interface CatalogItem {
   sectionId?: string | null;
   sectionName?: string | null;
   imageUrl?: string | null;
+  onHand?: string | null;
+  capacityMax?: string | null;
+  fillPercent?: number | null;
+  reserved?: string | null;
+  lowStockAlert?: boolean | null;
+  alertEnabled?: boolean | null;
 }
 
 export interface ProviderSection {

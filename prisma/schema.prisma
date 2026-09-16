@@ -163,6 +163,7 @@ model Provider {
   acceptsCardAtStore     Boolean  @default(false) @map("accepts_card_at_store")
   offersWholesale        Boolean  @default(false) @map("offers_wholesale")
   offersRetail           Boolean  @default(true) @map("offers_retail")
+  posShowImages          Boolean  @default(true) @map("pos_show_images")
   googlePlaceId          String?  @map("google_place_id")
   googleMapsUrl          String?  @map("google_maps_url")
   googleReviewsEnabled   Boolean  @default(false) @map("google_reviews_enabled")
@@ -235,7 +236,13 @@ model ProviderProduct {
   sectionId   String?  @map("section_id")
   price       Decimal  @db.Decimal(10, 2)
   isAvailable Boolean  @default(true) @map("is_available")
-  stock       Int?
+  /// Deprecado F12 (ADR-036): no leer ni escribir. Fuente de verdad = onHand.
+  stock                  Int?
+  onHand                 Decimal  @default(0) @map("on_hand") @db.Decimal(12, 3)
+  capacityMax            Decimal? @map("capacity_max") @db.Decimal(12, 3)
+  alertThresholdPercent  Int      @default(10) @map("alert_threshold_percent")
+  alertEnabled           Boolean  @default(true) @map("alert_enabled")
+  boxContentFactor       Decimal? @map("box_content_factor") @db.Decimal(12, 3)
   imageUrl    String?  @map("image_url")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -246,6 +253,7 @@ model ProviderProduct {
   orderItems OrderItem[]
 
   @@unique([providerId, productId])
+  @@index([providerId])
   @@map("provider_products")
 }
 
@@ -298,6 +306,7 @@ model OrderItem {
   product         Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
   providerProduct ProviderProduct? @relation(fields: [providerProductId], references: [id], onDelete: SetNull)
 
+  @@index([providerProductId])
   @@map("order_items")
 }
 

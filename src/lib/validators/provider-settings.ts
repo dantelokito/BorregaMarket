@@ -151,10 +151,24 @@ export const patchProviderSettingsSchema = z
     acceptsCardAtStore: z.boolean().optional(),
     offersWholesale: z.boolean().optional(),
     offersRetail: z.boolean().optional(),
+    posShowImages: z
+      .boolean({ invalid_type_error: "Debe ser verdadero o falso" })
+      .optional(),
+    id: z.string().optional(),
+    providerId: z.string().optional(),
     openingHours: openingHoursSchema,
   })
   .strict()
-  .superRefine(brandPairSuperRefine);
+  .superRefine(brandPairSuperRefine)
+  .superRefine((data, ctx) => {
+    if (data.posShowImages !== undefined && typeof data.posShowImages !== "boolean") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["posShowImages"],
+        message: "Debe ser verdadero o falso",
+      });
+    }
+  });
 
 export type PatchProviderSettingsInput = z.infer<typeof patchProviderSettingsSchema>;
 

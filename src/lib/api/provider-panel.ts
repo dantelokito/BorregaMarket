@@ -18,6 +18,7 @@ export interface PatchProviderSettingsInput {
   googleReviewsEnabled?: boolean;
   primaryColor?: string | null;
   secondaryColor?: string | null;
+  posShowImages?: boolean;
 }
 
 export async function updateProviderSettings(input: PatchProviderSettingsInput) {

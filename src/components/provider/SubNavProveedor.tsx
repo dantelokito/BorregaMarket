@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Warehouse } from "lucide-react";
 import { listProviderOrders } from "@/lib/api/provider-ops";
 import { useProviderScope } from "@/hooks/useProviderScope";
 
 const TABS = [
+  { href: "/proveedor/inventario", label: "Inventario" },
   { href: "/proveedor", label: "Catálogo" },
   { href: "/proveedor/pos", label: "POS" },
   { href: "/proveedor/ordenes", label: "Órdenes" },
@@ -46,6 +48,9 @@ export function SubNavProveedor() {
                     : "border-transparent text-slate-600 hover:text-slate-900"
                 }`}
               >
+                {tab.href === "/proveedor/inventario" ? (
+                  <Warehouse size={16} aria-hidden />
+                ) : null}
                 {tab.label}
                 {tab.href === "/proveedor/ordenes" && activeCount != null && activeCount > 0 && (
                   <span className="rounded-full bg-[var(--brand)] px-2 py-0.5 text-xs text-white">
