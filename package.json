@@ -19,7 +19,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@prisma/client": "^6.5.0",
+    "@prisma/client": "^7.10.0",
     "@upstash/redis": "^1.38.2",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.10.0",
