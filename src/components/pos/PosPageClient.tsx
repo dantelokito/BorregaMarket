@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Search, Zap } from "lucide-react";
-import { getMyBusiness, getMyProducts } from "@/lib/api/provider-panel";
+import { getMyBusiness, getMyProducts, updateProviderSettings } from "@/lib/api/provider-panel";
 import { PosProductCard } from "@/components/pos/PosProductCard";
+import { PosImagesToggle } from "@/components/inventory/PosImagesToggle";
 import { createPosSale } from "@/lib/api/provider-ops";
 import { ApiError } from "@/lib/api/client";
 import type { CatalogItem, Order, UnitOfMeasure } from "@/lib/api/types";
@@ -39,6 +40,8 @@ export function PosPageClient() {
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [businessName, setBusinessName] = useState("");
   const [posShowImages, setPosShowImages] = useState(true);
+  const [posImagesBusy, setPosImagesBusy] = useState(false);
+  const [posImagesError, setPosImagesError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -290,6 +293,24 @@ export function PosPageClient() {
     <div className="mx-auto flex max-w-[1600px] flex-col lg:h-[calc(100vh-9rem)] lg:flex-row">
       <section className="flex-1 overflow-y-auto p-4 lg:w-[58%] lg:border-r">
         <ActiveStoreEyebrow />
+        <PosImagesToggle
+          checked={posShowImages}
+          onChange={(next) => {
+            const prev = posShowImages;
+            setPosShowImages(next);
+            setPosImagesError("");
+            setPosImagesBusy(true);
+            void updateProviderSettings({ posShowImages: next })
+              .then(() => setPosImagesBusy(false))
+              .catch(() => {
+                setPosShowImages(prev);
+                setPosImagesBusy(false);
+                setPosImagesError("No se guardó la preferencia");
+              });
+          }}
+          disabled={posImagesBusy}
+          error={posImagesError}
+        />
         <div className="mb-4 flex gap-2">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />

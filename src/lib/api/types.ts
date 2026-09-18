@@ -212,10 +212,15 @@ export interface ProviderBusiness {
   phone: string | null;
   description: string | null;
   isVerified: boolean;
+  verifiedAt?: string | null;
   logoUrl: string | null;
   coverUrl: string | null;
   preparationTimeMinutes?: number;
   offersDelivery?: boolean;
+  whatsappEnabled?: boolean;
+  acceptsCardAtStore?: boolean;
+  offersWholesale?: boolean;
+  offersRetail?: boolean;
   googlePlaceId?: string | null;
   googleMapsUrl?: string | null;
   googleReviewsEnabled?: boolean;
@@ -223,6 +228,7 @@ export interface ProviderBusiness {
   primaryColor?: string | null;
   secondaryColor?: string | null;
   posShowImages?: boolean;
+  openingHours?: OpeningHourDay[] | null;
 }
 
 export interface CatalogItem {

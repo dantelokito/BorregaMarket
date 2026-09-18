@@ -13,12 +13,24 @@ export async function getMyBusiness() {
 export interface PatchProviderSettingsInput {
   preparationTimeMinutes?: number;
   offersDelivery?: boolean;
+  whatsappEnabled?: boolean;
+  acceptsCardAtStore?: boolean;
+  offersWholesale?: boolean;
+  offersRetail?: boolean;
   googlePlaceId?: string | null;
   googleMapsUrl?: string | null;
   googleReviewsEnabled?: boolean;
   primaryColor?: string | null;
   secondaryColor?: string | null;
   posShowImages?: boolean;
+  businessName?: string;
+  address?: string;
+  city?: string;
+  phone?: string;
+  description?: string | null;
+  latitude?: number;
+  longitude?: number;
+  openingHours?: import("./types").OpeningHourDay[] | null;
 }
 
 export async function updateProviderSettings(input: PatchProviderSettingsInput) {

@@ -88,6 +88,10 @@ export function providerReportPdfUrl(grain: ReportGrain, date: string) {
   return `/api/provider/reports.pdf${buildQuery({ grain, date })}`;
 }
 
+export function providerReportPdfRangeUrl(from: string, to: string) {
+  return `/api/provider/reports.pdf${buildQuery({ from, to })}`;
+}
+
 function filenameFromDisposition(header: string | null, fallback: string): string {
   if (!header) return fallback;
   const utf = header.match(/filename\*=UTF-8''([^;]+)/i);
@@ -98,25 +102,24 @@ function filenameFromDisposition(header: string | null, fallback: string): strin
   return plain?.[1]?.trim() || fallback;
 }
 
-/** Blob download. Do not use apiGet — PDF is not a JSON envelope. */
-export async function downloadProviderReportPdf(grain: ReportGrain, date: string): Promise<void> {
-  const url = providerReportPdfUrl(grain, date);
+async function downloadPdfFromUrl(url: string, fallback: string): Promise<void> {
   const res = await fetch(url, { credentials: "include" });
   const contentType = res.headers.get("content-type") ?? "";
 
   if (!res.ok || !contentType.includes("application/pdf")) {
     const body = (await res.json().catch(() => ({}))) as {
-      error?: string;
+      error?: string | { message?: string };
       details?: { field: string; message: string }[];
     };
-    throw new ApiError(body.error ?? "No pudimos descargar el PDF", res.status, body.details);
+    const message =
+      typeof body.error === "string"
+        ? body.error
+        : body.error?.message ?? "No pudimos descargar el PDF";
+    throw new ApiError(message, res.status, body.details);
   }
 
   const blob = await res.blob();
-  const filename = filenameFromDisposition(
-    res.headers.get("content-disposition"),
-    `reporte-${grain}-${date}.pdf`
-  );
+  const filename = filenameFromDisposition(res.headers.get("content-disposition"), fallback);
   const href = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = href;
@@ -125,4 +128,13 @@ export async function downloadProviderReportPdf(grain: ReportGrain, date: string
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(href);
+}
+
+/** Blob download. Do not use apiGet — PDF is not a JSON envelope. */
+export async function downloadProviderReportPdf(grain: ReportGrain, date: string): Promise<void> {
+  await downloadPdfFromUrl(providerReportPdfUrl(grain, date), `reporte-${grain}-${date}.pdf`);
+}
+
+export async function downloadProviderReportPdfRange(from: string, to: string): Promise<void> {
+  await downloadPdfFromUrl(providerReportPdfRangeUrl(from, to), `reporte-${from}_${to}.pdf`);
 }

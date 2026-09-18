@@ -1,9 +1,9 @@
 import type { OpeningHourDay } from "@/lib/api/types";
 
 /** Week starts on Monday for display; `day` follows JS getDay (0 = domingo). */
-const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
+export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
 
-const DAY_LABELS: Record<number, string> = {
+export const DAY_LABELS: Record<number, string> = {
   0: "Domingo",
   1: "Lunes",
   2: "Martes",

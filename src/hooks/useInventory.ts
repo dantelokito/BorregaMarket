@@ -5,9 +5,12 @@ import { ApiError } from "@/lib/api/client";
 import {
   listInventory,
   patchInventoryItem,
+  postInventoryAdjustment,
   postInventoryEntry,
+  postInventoryShrinkage,
   type InventoryItem,
   type PatchInventoryInput,
+  type ShrinkageReason,
 } from "@/lib/api/inventory";
 
 export function useInventory() {
@@ -102,5 +105,73 @@ export function useInventoryMutations(onDone: () => Promise<void>) {
     [onDone]
   );
 
-  return { busy, formError, fieldErrors, setFieldErrors, submitEntry, submitFicha };
+  const submitShrinkage = useCallback(
+    async (
+      providerProductId: string,
+      input: { quantity: string; reason: ShrinkageReason; note?: string }
+    ) => {
+      setBusy(true);
+      setFormError("");
+      setFieldErrors({});
+      try {
+        await postInventoryShrinkage(providerProductId, input);
+        await onDone();
+        return true;
+      } catch (err) {
+        if (err instanceof ApiError) {
+          const mapped: Record<string, string> = {};
+          for (const d of err.details ?? []) {
+            if (d.field) mapped[d.field] = d.message;
+          }
+          setFieldErrors(mapped);
+          setFormError(err.message);
+        } else {
+          setFormError("No se registró la merma");
+        }
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [onDone]
+  );
+
+  const submitAdjustment = useCallback(
+    async (providerProductId: string, input: { countedOnHand: string; note?: string }) => {
+      setBusy(true);
+      setFormError("");
+      setFieldErrors({});
+      try {
+        await postInventoryAdjustment(providerProductId, input);
+        await onDone();
+        return true;
+      } catch (err) {
+        if (err instanceof ApiError) {
+          const mapped: Record<string, string> = {};
+          for (const d of err.details ?? []) {
+            if (d.field) mapped[d.field] = d.message;
+          }
+          setFieldErrors(mapped);
+          setFormError(err.message);
+        } else {
+          setFormError("No se registró el ajuste");
+        }
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [onDone]
+  );
+
+  return {
+    busy,
+    formError,
+    fieldErrors,
+    setFieldErrors,
+    submitEntry,
+    submitFicha,
+    submitShrinkage,
+    submitAdjustment,
+  };
 }

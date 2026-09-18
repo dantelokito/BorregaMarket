@@ -18,17 +18,33 @@ import { useToast } from "@/components/ui/Toast";
 const PLATFORM_PRIMARY = "#e23744";
 const PLATFORM_SECONDARY = "#c13515";
 
-export function BrandColorPicker() {
+export function BrandColorPicker({
+  skipLoad = false,
+  initialPrimary = "",
+  initialSecondary = "",
+  embedded = false,
+}: {
+  skipLoad?: boolean;
+  initialPrimary?: string | null;
+  initialSecondary?: string | null;
+  embedded?: boolean;
+} = {}) {
   const { showToast } = useToast();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!skipLoad);
   const [saving, setSaving] = useState(false);
-  const [primary, setPrimary] = useState("");
-  const [secondary, setSecondary] = useState("");
+  const [primary, setPrimary] = useState(initialPrimary ?? "");
+  const [secondary, setSecondary] = useState(initialSecondary ?? "");
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   function load() {
+    if (skipLoad) {
+      setPrimary(initialPrimary ?? "");
+      setSecondary(initialSecondary ?? "");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setLoadError("");
     getMyBusiness()
@@ -48,7 +64,9 @@ export function BrandColorPicker() {
 
   useEffect(() => {
     load();
-  }, []);
+    // skipLoad uses parent GET /api/provider/me
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skipLoad, initialPrimary, initialSecondary]);
 
   const primaryOk = !primary || (isValidHex(primary) && isPrimaryContrastValid(primary));
   const secondaryOk = !secondary || (isValidHex(secondary) && isSecondaryContrastValid(secondary));
@@ -122,8 +140,12 @@ export function BrandColorPicker() {
     );
   }
 
+  const shell = embedded
+    ? "space-y-4"
+    : "mb-10 space-y-4 rounded-xl border border-gray-200 bg-white p-6";
+
   return (
-    <section className="mb-10 space-y-4 rounded-xl border border-gray-200 bg-white p-6">
+    <section className={shell}>
       <div>
         <h2 className="text-lg font-semibold">Colores de tu marca</h2>
         <p className="mt-1 text-sm text-slate-600">

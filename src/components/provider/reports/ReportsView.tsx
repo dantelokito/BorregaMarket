@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getProviderReportRange } from "@/lib/api/provider-ops";
+import { getProviderReportRange, downloadProviderReportPdfRange } from "@/lib/api/provider-ops";
 import { getMyProducts } from "@/lib/api/provider-panel";
 import { ApiError } from "@/lib/api/client";
 import type { ProviderReport } from "@/lib/api/types";
@@ -16,12 +16,14 @@ import { formatGeneratedAt } from "@/lib/reports/period";
 import { formatCurrency } from "@/lib/format";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { DocumentActions } from "./DocumentActions";
-import { ReportBarChart, ReportKpiCard } from "./ReportKpis";
+import { ReportKpiCard } from "./ReportKpis";
+import { UnifiedProviderChart } from "./UnifiedProviderChart";
 import { ReportOriginSplit } from "./ReportOriginSplit";
 import { MonthShortcut } from "./MonthShortcut";
 import { DateRangeFields } from "./DateRangeFields";
 import { ProductFilterChecklist } from "./ProductFilterChecklist";
 import { ProductSalesTable } from "./ProductSalesTable";
+import { productsToTopPoints, seriesToTrendPoints, sourceToMixPoints } from "@/lib/reports/unified-chart";
 import { mapF10ApiError } from "@/lib/ui/f10-errors";
 import { ReportsViewTabs } from "./ReportsViewTabs";
 import { InventoryReportsPanel } from "./InventoryReportsPanel";
@@ -46,6 +48,8 @@ export function ReportsView() {
   const [error, setError] = useState("");
   const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [filterOptions, setFilterOptions] = useState<{ id: string; name: string }[]>([]);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState("");
   const tab = searchParams.get("tab") === "inventario" ? "inventario" : "ventas";
 
   const pushQuery = useCallback(
@@ -60,7 +64,7 @@ export function ReportsView() {
       for (const id of nextIds) params.append("productIds", id);
       router.replace(`/proveedor/dashboard?${params.toString()}`, { scroll: false });
     },
-    [router]
+    [router, tab]
   );
 
   useEffect(() => {
@@ -168,10 +172,26 @@ export function ReportsView() {
         </div>
         <DocumentActions
           onPrint={() => window.print()}
-          showPdf={false}
-          disabled={!report}
+          showPdf
+          onPdf={() => {
+            setPdfError("");
+            setPdfBusy(true);
+            void downloadProviderReportPdfRange(from, to)
+              .catch((err) => {
+                setPdfError(err instanceof ApiError ? err.message : "No pudimos descargar el PDF");
+              })
+              .finally(() => setPdfBusy(false));
+          }}
+          pdfLoading={pdfBusy}
+          disabled={!report || loading}
         />
       </div>
+
+      {pdfError && (
+        <div className="no-print mb-4">
+          <ErrorBanner message={pdfError} />
+        </div>
+      )}
 
       {error && (
         <div className="no-print mb-4">
@@ -228,14 +248,25 @@ export function ReportsView() {
               />
             </div>
 
-            {report.series.length > 0 && (
-              <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5">
-                <h3 className="mb-3 text-lg font-semibold">{chartTitle}</h3>
-                <div className="overflow-x-auto">
-                  <ReportBarChart series={report.series} title={chartTitle} />
-                </div>
-              </section>
-            )}
+            <div className="mt-8 grid gap-4 lg:grid-cols-2">
+              <div className="lg:col-span-2">
+                <UnifiedProviderChart
+                  variant="trend"
+                  title={chartTitle}
+                  points={seriesToTrendPoints(report.series)}
+                />
+              </div>
+              <UnifiedProviderChart
+                variant="mix"
+                title="Mix de canal"
+                points={sourceToMixPoints(report.kpis.bySource)}
+              />
+              <UnifiedProviderChart
+                variant="top"
+                title="Top productos"
+                points={productsToTopPoints(report.products ?? report.topProducts ?? [])}
+              />
+            </div>
 
             <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5">
               <h3 className="mb-3 text-lg font-semibold">Venta por producto</h3>

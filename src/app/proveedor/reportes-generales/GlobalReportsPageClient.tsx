@@ -4,16 +4,21 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getGlobalProviderReport } from "@/lib/api/provider-f11";
 import { getGlobalInventoryReport } from "@/lib/api/provider-f13";
+import { getMyProducts } from "@/lib/api/provider-panel";
 import { ApiError } from "@/lib/api/client";
 import type { GlobalInventoryReport, GlobalProviderReport } from "@/lib/api/types";
 import { ymdInTimeZone } from "@/lib/timezone";
 import { currentMonthShortcut, monthShortcutRange, validateDateRange } from "@/lib/reports/date-range";
 import { formatCurrency } from "@/lib/format";
+import { productsToTopPoints, seriesToTrendPoints, sourceToMixPoints } from "@/lib/reports/unified-chart";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { DocumentActions } from "@/components/provider/reports/DocumentActions";
 import { ReportKpiCard } from "@/components/provider/reports/ReportKpis";
+import { UnifiedProviderChart } from "@/components/provider/reports/UnifiedProviderChart";
 import { MonthShortcut } from "@/components/provider/reports/MonthShortcut";
 import { DateRangeFields } from "@/components/provider/reports/DateRangeFields";
+import { ProductFilterChecklist } from "@/components/provider/reports/ProductFilterChecklist";
+import { ProductSalesTable } from "@/components/provider/reports/ProductSalesTable";
 import { BranchBreakdownTable } from "@/components/provider/reports/BranchBreakdownTable";
 import { useProviderScope } from "@/hooks/useProviderScope";
 import { ActiveStoreEyebrow } from "@/components/provider/ActiveStoreEyebrow";
@@ -31,6 +36,7 @@ export function GlobalReportsPageClient() {
   const defaults = currentMonthShortcut();
   const from = parseYmd(searchParams.get("from")) ?? defaults.from;
   const to = parseYmd(searchParams.get("to")) ?? defaults.to;
+  const productIds = searchParams.getAll("productIds").filter(Boolean);
   const rangeError = validateDateRange(from, to, today);
 
   const [report, setReport] = useState<GlobalProviderReport | null>(null);
@@ -40,6 +46,7 @@ export function GlobalReportsPageClient() {
   const [inv, setInv] = useState<GlobalInventoryReport | null>(null);
   const [invLoading, setInvLoading] = useState(false);
   const [invError, setInvError] = useState("");
+  const [filterOptions, setFilterOptions] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     if (scopeStatus === "loading") return;
@@ -49,13 +56,14 @@ export function GlobalReportsPageClient() {
   }, [scopeStatus, showGlobalReports, router]);
 
   const pushQuery = useCallback(
-    (nextFrom: string, nextTo: string) => {
+    (nextFrom: string, nextTo: string, nextIds: string[] = productIds) => {
       const params = new URLSearchParams();
       params.set("from", nextFrom);
       params.set("to", nextTo);
+      for (const id of nextIds) params.append("productIds", id);
       router.replace(`/proveedor/reportes-generales?${params.toString()}`, { scroll: false });
     },
-    [router]
+    [router, productIds]
   );
 
   const load = useCallback(async () => {
@@ -69,7 +77,11 @@ export function GlobalReportsPageClient() {
     setError("");
     setErrorCode(undefined);
     try {
-      const data = await getGlobalProviderReport({ from, to });
+      const data = await getGlobalProviderReport({
+        from,
+        to,
+        productIds: productIds.length > 0 ? productIds : undefined,
+      });
       setReport(data);
     } catch (err) {
       setReport(null);
@@ -86,7 +98,7 @@ export function GlobalReportsPageClient() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, rangeError, showGlobalReports, providerCount]);
+  }, [from, to, productIds.join("|"), rangeError, showGlobalReports, providerCount]);
 
   const loadInv = useCallback(async () => {
     if (!showGlobalReports) return;
@@ -102,6 +114,23 @@ export function GlobalReportsPageClient() {
       setInvLoading(false);
     }
   }, [showGlobalReports]);
+
+  useEffect(() => {
+    getMyProducts()
+      .then(({ data }) => {
+        const options = data.catalog
+          .filter((item) => item.providerProductId)
+          .map((item) => ({
+            id: item.providerProductId as string,
+            name: item.product.name,
+          }));
+        options.push({ id: "quickSale", name: "Venta rápida" });
+        setFilterOptions(options);
+      })
+      .catch(() => {
+        setFilterOptions([{ id: "quickSale", name: "Venta rápida" }]);
+      });
+  }, []);
 
   useEffect(() => {
     if (scopeStatus !== "ready" || !showGlobalReports) return;
@@ -166,6 +195,14 @@ export function GlobalReportsPageClient() {
         </div>
       </div>
 
+      <div className="no-print mb-6">
+        <ProductFilterChecklist
+          options={filterOptions}
+          selected={productIds}
+          onChange={(next) => pushQuery(from, to, next)}
+        />
+      </div>
+
       {error ? (
         <ErrorBanner
           message={error}
@@ -191,6 +228,29 @@ export function GlobalReportsPageClient() {
             <ReportKpiCard label="Órdenes" value={String(report.kpis.orderCount)} />
             <ReportKpiCard label="Ticket" value={formatCurrency(report.kpis.avgTicket)} />
           </div>
+          <div className="mb-6 grid gap-4 lg:grid-cols-2">
+            <div className="lg:col-span-2">
+              <UnifiedProviderChart
+                variant="trend"
+                title={`Ventas por día (${from} – ${to})`}
+                points={seriesToTrendPoints(report.series)}
+              />
+            </div>
+            <UnifiedProviderChart
+              variant="mix"
+              title="Mix de canal"
+              points={sourceToMixPoints(report.kpis.bySource)}
+            />
+            <UnifiedProviderChart
+              variant="top"
+              title="Top productos"
+              points={productsToTopPoints(report.products)}
+            />
+          </div>
+          <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
+            <h3 className="mb-3 text-lg font-semibold">Venta por producto</h3>
+            <ProductSalesTable products={report.products} />
+          </section>
           <BranchBreakdownTable
             rows={report.byProvider}
             totalGmv={report.kpis.gmv}
