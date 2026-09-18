@@ -4,8 +4,10 @@ import { SystemModule } from "@prisma/client";
 import { AuthError } from "@/lib/auth/session";
 import { requireAdminModule } from "@/lib/auth/require-admin-module";
 import { ok, apiError, fromZodError, handleRouteError } from "@/lib/api/response";
+import { methodNotAllowedDeleteProduct } from "@/lib/api/method-not-allowed";
 import { patchAdminProductSchema } from "@/lib/validators/catalog-f10";
 import {
+  AdminQueryError,
   ProductConflictError,
   ProductNotFoundError,
   updateAdminProduct,
@@ -33,6 +35,9 @@ export async function PATCH(
     if (err instanceof ProductNotFoundError) {
       return apiError(err.message, 404);
     }
+    if (err instanceof AdminQueryError) {
+      return apiError(err.message, 400, err.details);
+    }
     if (err instanceof ProductConflictError) {
       return apiError(err.message, 409, [
         { field: "slug", message: "Slug duplicado en el catálogo global" },
@@ -46,10 +51,7 @@ export async function PATCH(
 }
 
 export async function DELETE() {
-  return NextResponse.json(
-    { error: "Method Not Allowed" },
-    { status: 405, headers: { Allow: "GET, PATCH" } }
-  );
+  return methodNotAllowedDeleteProduct("GET, PATCH", "admin");
 }
 
 export async function GET() {

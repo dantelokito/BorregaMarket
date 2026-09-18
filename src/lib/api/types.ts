@@ -248,6 +248,11 @@ export interface CatalogItem {
   reserved?: string | null;
   lowStockAlert?: boolean | null;
   alertEnabled?: boolean | null;
+  archivedAt?: string | null;
+  saleUnit?: string | null;
+  effectiveSaleUnit?: string | null;
+  boxContentFactor?: string | null;
+  canEditMaster?: boolean;
 }
 
 export interface ProviderSection {
@@ -280,7 +285,59 @@ export interface AdminProduct {
   imageUrl: string | null;
   isActive: boolean;
   scope: ProductScope;
+  ownerProviderId?: string | null;
+  ownerBusinessName?: string | null;
   createdAt: string;
+}
+
+export interface PriceHistoryRow {
+  id: string;
+  price: string;
+  previousPrice: string | null;
+  changedByUserId: string | null;
+  createdAt: string;
+}
+
+export interface InventoryReportBalance {
+  providerProductId: string;
+  productId?: string;
+  name: string;
+  effectiveSaleUnit: string;
+  onHand: string;
+  reserved?: string;
+  isAvailable?: boolean;
+}
+
+export interface InventoryReportEntry {
+  id: string;
+  providerProductId: string;
+  name: string;
+  quantity: string;
+  receiveAs: string;
+  appliedDelta: string;
+  createdAt: string;
+}
+
+export interface BranchInventoryReport {
+  timezone: string;
+  generatedAt: string;
+  scope: "activeProvider";
+  providerId: string;
+  balances: InventoryReportBalance[];
+  entries: InventoryReportEntry[];
+}
+
+export interface GlobalInventoryReport {
+  timezone: string;
+  generatedAt: string;
+  scope: "allOwnedProviders";
+  providerCount: number;
+  byProvider: Array<{
+    providerId: string;
+    businessName: string;
+    branchLabel?: string | null;
+    balances: InventoryReportBalance[];
+  }>;
 }
 
 export interface ProviderProductsResponse {

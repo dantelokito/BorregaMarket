@@ -1,7 +1,7 @@
 # Observabilidad — LaBorregaMarket
 
-> **Versión:** 0.12.0  
-> **Fecha:** 15/09/2026  
+> **Versión:** 0.13.0  
+> **Fecha:** 16/09/2026  
 > **Producto:** LaBorregaMarket (repo BorregaMarket)
 
 ## Runtime
@@ -19,7 +19,7 @@
 | JWT vigente | `sub` + `role` | HttpOnly, Path `/`, SameSite=Lax, Secure en HTTPS |
 | `lbm_active_provider` | cuid de sucursal | Iguales |
 
-F12 no añade env Must. Inventario es Decimal en Postgres (`on_hand`). Media: `UPLOADS_DIR` (disco). Cloudinary no es Must.
+F13 no añade env Must. Inventario sigue Decimal (`on_hand`). Archivo de oferta: `archived_at` + `sale_unit`. Media: `UPLOADS_DIR` (disco). Cloudinary no es Must.
 
 ## Logs y jobs
 
@@ -35,3 +35,4 @@ F12 no añade env Must. Inventario es Decimal en Postgres (`on_hand`). Media: `U
 | 0.10.x | Media disco, admin, reportes DASH (código en `main` vía PR #10) |
 | 0.11.0 | User 1:N, cookie activa, reportes globales |
 | 0.12.0 | Inventario blando Decimal por sucursal |
+| 0.13.0 | Archivo de oferta, unidad, entradas, historial de precio |

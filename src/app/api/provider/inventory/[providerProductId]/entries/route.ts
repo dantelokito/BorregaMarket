@@ -9,6 +9,7 @@ import {
   addInventoryEntry,
   InventoryValidationError,
 } from "@/lib/services/inventory.service";
+import { OfferArchivedError } from "@/lib/catalog/offer";
 import { inventoryEntrySchema } from "@/lib/validators/inventory";
 
 export async function POST(
@@ -30,6 +31,9 @@ export async function POST(
     if (err instanceof AuthError) return apiError(err.message, err.status);
     if (err instanceof ProviderNotFoundError) return apiError(err.message, 404);
     if (err instanceof CatalogForbiddenError) return apiError(err.message, 403);
+    if (err instanceof OfferArchivedError) {
+      return apiError(err.message, 409, err.details());
+    }
     if (err instanceof InventoryValidationError) {
       return apiError(err.message, 400, err.details);
     }

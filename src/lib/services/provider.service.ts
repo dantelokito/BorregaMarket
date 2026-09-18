@@ -1,4 +1,4 @@
-import { Prisma, SystemModule, AuditAction } from "@prisma/client";
+import { Prisma, SystemModule, AuditAction, ProductUnit } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { buildMeta } from "@/lib/services/pagination";
@@ -18,6 +18,7 @@ import {
 } from "@/lib/validators/provider-settings";
 import { canonicalizeHex } from "@/lib/color/contrast";
 import { formatAuthorName } from "@/lib/validators/review";
+import { effectiveSaleUnit, sellableProviderProductWhere } from "@/lib/catalog/sellable";
 import {
   computeIsOpenNow,
   isHoursPublished,
@@ -92,7 +93,8 @@ function mapProviderCard(
     offersDelivery: boolean;
     providerProducts: Array<{
       price: Prisma.Decimal;
-      product: { name: string; unit: string; imageUrl: string | null };
+      saleUnit: ProductUnit | null;
+      product: { name: string; unit: ProductUnit; imageUrl: string | null };
     }>;
     _count: { providerProducts: number };
   },
@@ -120,7 +122,7 @@ function mapProviderCard(
     sampleProducts: p.providerProducts.map((pp) => ({
       name: pp.product.name,
       price: Number(pp.price),
-      unit: pp.product.unit,
+      unit: effectiveSaleUnit(pp.saleUnit, pp.product.unit),
       imageUrl: pp.product.imageUrl,
     })),
     ...(distanceKm !== undefined ? { distanceKm } : {}),
@@ -134,7 +136,7 @@ export function buildWhere(filters: ListProvidersFilters): Prisma.ProviderWhereI
     and.push({
       providerProducts: {
         some: {
-          isAvailable: true,
+          ...sellableProviderProductWhere,
           product: {
             isActive: true,
             scope: "GLOBAL",
@@ -153,7 +155,7 @@ export function buildWhere(filters: ListProvidersFilters): Prisma.ProviderWhereI
         {
           providerProducts: {
             some: {
-              isAvailable: true,
+              ...sellableProviderProductWhere,
               product: {
                 isActive: true,
                 OR: [
@@ -221,11 +223,8 @@ export async function createProvider(
   return provider;
 }
 
-/** Canales públicos: vendible = isAvailable + Product.isActive (ADR-022). */
-export const sellableProviderProductWhere = {
-  isAvailable: true,
-  product: { isActive: true },
-} as const;
+/** Canales públicos: vendible = isAvailable + Product.isActive + no archivado (ADR-022 / ADR-038). */
+export { sellableProviderProductWhere };
 
 const providerCardInclude = {
   providerProducts: {
@@ -362,8 +361,8 @@ export async function getProviderDetail(id: string) {
       name: pp.product.name,
       slug: pp.product.slug,
       category: pp.product.category,
-      unit: pp.product.unit,
-      unitOfMeasure: toUnitOfMeasure(pp.product.unit),
+      unit: effectiveSaleUnit(pp.saleUnit, pp.product.unit),
+      unitOfMeasure: toUnitOfMeasure(effectiveSaleUnit(pp.saleUnit, pp.product.unit)),
       price: Number(pp.price),
       isAvailable: pp.isAvailable,
       imageUrl: pp.imageUrl ?? pp.product.imageUrl,

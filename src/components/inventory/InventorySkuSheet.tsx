@@ -7,6 +7,11 @@ import { Input } from "@/components/ui/Input";
 import type { InventoryItem, PatchInventoryInput } from "@/lib/api/inventory";
 import { parseDecimalInput, qtyToApiString } from "@/lib/format";
 import { parseQtyString } from "@/lib/inventory/capacity";
+import { onHandIsNonZero, reservedIsPositive } from "@/lib/catalog/f13";
+import {
+  ActiveOrderBlockAlert,
+  UnitChangeConfirmDialog,
+} from "@/components/provider/catalog/UnitChangeConfirmDialog";
 
 export function InventorySkuSheet({
   item,
@@ -31,6 +36,9 @@ export function InventorySkuSheet({
   const [alertOn, setAlertOn] = useState(true);
   const [factor, setFactor] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [encargarOpen, setEncargarOpen] = useState(false);
+  const [pending, setPending] = useState<PatchInventoryInput | null>(null);
 
   useEffect(() => {
     if (!open || !item) return;
@@ -67,12 +75,26 @@ export function InventorySkuSheet({
     }
     setErrors(next);
     if (Object.keys(next).length > 0) return;
-    const ok = await onSubmit({
+    const payload: PatchInventoryInput = {
       capacityMax: qtyToApiString(cap!),
       alertThresholdPercent: th,
       alertEnabled: alertOn,
       boxContentFactor: factorPayload,
-    });
+    };
+    if (!item) return;
+    const prevFactor = item.boxContentFactor ?? null;
+    const nextFactor = factorPayload === undefined ? prevFactor : factorPayload;
+    const factorChanged = String(prevFactor ?? "") !== String(nextFactor ?? "");
+    if (factorChanged && reservedIsPositive(item.reserved)) {
+      setEncargarOpen(true);
+      return;
+    }
+    if (factorChanged && onHandIsNonZero(item.onHand)) {
+      setPending(payload);
+      setDiscardOpen(true);
+      return;
+    }
+    const ok = await onSubmit(payload);
     if (ok) onClose();
   }
 
@@ -91,7 +113,7 @@ export function InventorySkuSheet({
               Ficha de existencias
             </h2>
             <p className="text-sm text-slate-500">
-              {item.name} · {item.unit}
+              {item.name} · {item.effectiveSaleUnit ?? item.unit}
             </p>
           </div>
           <button type="button" className="min-h-11 min-w-11 rounded-lg hover:bg-gray-100" onClick={onClose} aria-label="Cerrar">
@@ -159,6 +181,23 @@ export function InventorySkuSheet({
           </Button>
         </form>
       </div>
+      <UnitChangeConfirmDialog
+        open={discardOpen}
+        onCancel={() => {
+          setDiscardOpen(false);
+          setPending(null);
+        }}
+        onConfirm={() => {
+          const payload = pending;
+          setDiscardOpen(false);
+          setPending(null);
+          if (!payload) return;
+          void onSubmit({ ...payload, confirmDiscard: true }).then((ok) => {
+            if (ok) onClose();
+          });
+        }}
+      />
+      <ActiveOrderBlockAlert open={encargarOpen} onClose={() => setEncargarOpen(false)} />
     </div>
   );
 }

@@ -1,8 +1,8 @@
 # LaBorregaMarket — Product Overview
 
-> **Versión del producto:** 0.12.0  
-> **Última actualización:** 15/09/2026  
-> **Estado:** Pre-lanzamiento — inventario blando Decimal por sucursal, User 1:N, media disco  
+> **Versión del producto:** 0.13.0  
+> **Última actualización:** 16/09/2026  
+> **Estado:** Pre-lanzamiento — archivo de oferta, unidad/precio por sucursal, reportes de inventario  
 > **Licencia:** [MIT](./LICENSE)
 
 ---
@@ -281,7 +281,15 @@ Cada proveedor tiene entradas `ProviderProduct` con variación de precio (~±10%
 - [x] POS y catálogo leen inventario blando; `pos_show_images`
 - [x] Ruta `/proveedor/inventario` y APIs `/api/provider/inventory`
 
-### Fase 13+ — Canales y monetización
+### Fase 13 — Archivo de oferta y unidad (v0.13.0)
+
+- [x] Archivo (ocultar) de oferta vs hard-delete; bandeja Restaurar
+- [x] Unidad y factor de oferta (`saleUnit`); no muta `Product.unit` GLOBAL
+- [x] Precio de oferta + historial; reportes de inventario (actual + entradas)
+- [x] Admin GLOBAL+LOCAL paginado; RBAC; 409 oferta oculta en entradas
+- [x] BUG-020: import de `inventoryEntrySchema` (500 → 200/409)
+
+### Fase 14+ — Canales y monetización
 
 - [ ] PWA / app móvil
 - [ ] Pagos en línea (pasarela)
@@ -328,7 +336,7 @@ LaBorregaMarket es un proyecto público con licencia MIT.
 | Reportar vulnerabilidades | `SECURITY.md` |
 | Esquema como contrato | `prisma/schema.prisma` |
 | Seed reproducible (solo local) | `prisma/seed.ts` |
-| Versionado | `0.12.0`; pagos y PWA en el roadmap |
+| Versionado | `0.13.0`; pagos y PWA en el roadmap |
 
 ---
 

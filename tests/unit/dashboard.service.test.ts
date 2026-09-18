@@ -62,7 +62,7 @@ describe("getProviderDashboard topProducts", () => {
       .find((sql) => sql.includes("provider_product_id"));
 
     expect(topSql).toContain("LEFT JOIN provider_products");
-    expect(topSql).toContain("is_available = true");
+    expect(topSql).not.toContain("is_available = true");
     expect(topSql).toContain("provider_product_id IS NULL");
     expect(result.topProducts).toEqual([
       {
@@ -177,7 +177,7 @@ describe("getProviderReport", () => {
     expect(year.series[11]).toEqual({ bucket: "2026-12", gmv: "0.00", orderCount: 0 });
   });
 
-  it("keeps venta rápida in topProducts and filters unavailable catalog rows", async () => {
+  it("keeps venta rápida in topProducts without filtering archived/inactive offers", async () => {
     const result = await getProviderReport({
       userId: "u2",
       grain: "month",
@@ -190,7 +190,7 @@ describe("getProviderReport", () => {
       .find((sql) => sql.includes("provider_product_id"));
 
     expect(topSql).toContain("LEFT JOIN provider_products");
-    expect(topSql).toContain("is_available = true");
+    expect(topSql).not.toContain("is_available = true");
     expect(topSql).toContain("provider_product_id IS NULL");
     expect(result.topProducts).toEqual([
       {

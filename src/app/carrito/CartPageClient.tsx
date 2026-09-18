@@ -164,7 +164,7 @@ export function CartPageClient() {
         return;
       }
       if (err instanceof ApiError && err.status === 409) {
-        setSubmitError(err.message || "Producto no disponible");
+        setSubmitError(err.message || "El producto ya no está disponible");
         void revalidate();
       } else if (err instanceof ApiError) {
         setSubmitError(err.message || "No pudimos enviar tu pedido");

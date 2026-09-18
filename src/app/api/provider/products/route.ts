@@ -1,8 +1,9 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError } from "@/lib/auth/session";
 import { applyActiveProviderCookie, requireActiveProvider } from "@/lib/auth/active-provider";
 import { ok, apiError, fromZodError, handleRouteError } from "@/lib/api/response";
+import { methodNotAllowedDeleteProduct } from "@/lib/api/method-not-allowed";
 import {
   getProviderCatalog,
   upsertProviderProduct,
@@ -14,6 +15,11 @@ import {
   CatalogNotFoundError,
   WrongProductRouteError,
 } from "@/lib/services/local-product.service";
+import { archivedQuerySchema } from "@/lib/validators/catalog-f10";
+import {
+  PaginationValidationError,
+  parseStrictPagination,
+} from "@/lib/services/pagination";
 
 const toggleSchema = z.object({
   productId: z.string(),
@@ -22,18 +28,42 @@ const toggleSchema = z.object({
   sectionId: z.string().cuid().optional(),
 });
 
-/** Proveedor: catálogo global con estado ProviderProduct */
 export async function GET(request: NextRequest) {
   try {
     const ctx = await requireActiveProvider(request);
-    const catalog = await getProviderCatalog(ctx.session.sub, ctx.provider.id);
-    return applyActiveProviderCookie(ok(catalog), ctx.provider.id);
+    const searchParams = new URL(request.url).searchParams;
+    const archivedRaw = searchParams.get("archived");
+    const archived =
+      archivedRaw == null
+        ? undefined
+        : archivedQuerySchema.parse(archivedRaw);
+    const { page, limit, skip } = parseStrictPagination(searchParams, {
+      defaultLimit: 50,
+      maxLimit: 100,
+    });
+    const result = await getProviderCatalog(ctx.session.sub, ctx.provider.id, {
+      archived,
+      page,
+      limit,
+      skip,
+    });
+    const { meta, ...data } = result;
+    return applyActiveProviderCookie(
+      NextResponse.json({ data, meta }),
+      ctx.provider.id
+    );
   } catch (err) {
     if (err instanceof AuthError) {
       return apiError(err.message, err.status);
     }
     if (err instanceof ProviderNotFoundError) {
       return apiError(err.message, 404);
+    }
+    if (err instanceof PaginationValidationError) {
+      return apiError(err.message, 400, err.details);
+    }
+    if (err instanceof z.ZodError) {
+      return apiError("Validation failed", 400, fromZodError(err));
     }
     return apiError("Error interno", 500);
   }
@@ -76,4 +106,8 @@ export async function PATCH(request: NextRequest) {
     }
     return handleRouteError(err);
   }
+}
+
+export async function DELETE() {
+  return methodNotAllowedDeleteProduct("GET, PATCH", "provider");
 }

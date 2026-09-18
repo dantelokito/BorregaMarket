@@ -48,6 +48,7 @@ export const patchInventorySchema = z
       "El factor de caja no es numérico",
       "El factor de caja debe ser mayor que cero"
     ),
+    confirmDiscard: z.boolean().optional(),
   })
   .strict()
   .refine(

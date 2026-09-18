@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm } from "./client";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm, buildQuery } from "./client";
 import type {
   LocalProductRecord,
   ProviderBusiness,
@@ -25,8 +25,15 @@ export async function updateProviderSettings(input: PatchProviderSettingsInput) 
   return apiPatch<ProviderBusiness>("/api/provider/me", input);
 }
 
-export async function getMyProducts() {
-  return apiGet<ProviderProductsResponse>("/api/provider/products");
+export async function getMyProducts(
+  query: { archived?: boolean; page?: number; limit?: number } = {}
+) {
+  const qs = buildQuery({
+    archived: query.archived ? 1 : undefined,
+    page: query.page ?? 1,
+    limit: query.limit ?? 100,
+  });
+  return apiGet<ProviderProductsResponse>(`/api/provider/products${qs}`);
 }
 
 export async function updateProduct(input: {
@@ -76,6 +83,7 @@ export interface CreateLocalProductInput {
   sectionId: string;
   isAvailable?: boolean;
   description?: string | null;
+  boxContentFactor?: string | null;
 }
 
 export async function createLocalProduct(input: CreateLocalProductInput) {
@@ -85,10 +93,13 @@ export async function createLocalProduct(input: CreateLocalProductInput) {
 export interface PatchLocalProductInput {
   name?: string;
   unit?: "KG" | "PIEZA" | "MANOJO" | "CAJA" | "LITRO" | "GRAMO";
+  saleUnit?: "KG" | "PIEZA" | "MANOJO" | "CAJA" | "LITRO" | "GRAMO" | null;
   price?: number;
   sectionId?: string;
   isAvailable?: boolean;
   description?: string | null;
+  boxContentFactor?: string | null;
+  confirmDiscard?: boolean;
 }
 
 export async function patchLocalProduct(id: string, input: PatchLocalProductInput) {

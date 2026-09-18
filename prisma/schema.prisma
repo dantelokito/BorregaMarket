@@ -68,6 +68,11 @@ enum FulfillmentType {
   DELIVERY
 }
 
+enum InventoryReceiveAs {
+  CATALOG
+  BOX
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -105,11 +110,12 @@ model User {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  providers Provider[]
-  orders    Order[]       @relation("ClientOrders")
-  reviews   Review[]      @relation("ClientReviews")
-  addresses UserAddress[]
-  auditLogs AuditLog[]
+  providers              Provider[]
+  orders                 Order[]       @relation("ClientOrders")
+  reviews                Review[]      @relation("ClientReviews")
+  addresses              UserAddress[]
+  auditLogs              AuditLog[]
+  priceHistoryChanges    ProviderProductPriceHistory[]
 
   @@map("users")
 }
@@ -243,18 +249,52 @@ model ProviderProduct {
   alertThresholdPercent  Int      @default(10) @map("alert_threshold_percent")
   alertEnabled           Boolean  @default(true) @map("alert_enabled")
   boxContentFactor       Decimal? @map("box_content_factor") @db.Decimal(12, 3)
+  archivedAt             DateTime?    @map("archived_at")
+  saleUnit               ProductUnit? @map("sale_unit")
   imageUrl    String?  @map("image_url")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  provider   Provider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
-  section    ProviderSection?  @relation(fields: [sectionId], references: [id], onDelete: Restrict)
-  orderItems OrderItem[]
+  provider     Provider                      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  product      Product                       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  section      ProviderSection?              @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  orderItems   OrderItem[]
+  inventoryEntries InventoryEntry[]
+  priceHistory ProviderProductPriceHistory[]
 
   @@unique([providerId, productId])
   @@index([providerId])
+  @@index([providerId, archivedAt])
   @@map("provider_products")
+}
+
+model InventoryEntry {
+  id                String             @id @default(cuid())
+  providerProductId String             @map("provider_product_id")
+  quantity          Decimal            @db.Decimal(12, 3)
+  receiveAs         InventoryReceiveAs @map("receive_as")
+  appliedDelta      Decimal            @map("applied_delta") @db.Decimal(12, 3)
+  createdAt         DateTime           @default(now()) @map("created_at")
+
+  providerProduct ProviderProduct @relation(fields: [providerProductId], references: [id], onDelete: Restrict)
+
+  @@index([providerProductId, createdAt])
+  @@map("inventory_entries")
+}
+
+model ProviderProductPriceHistory {
+  id                String   @id @default(cuid())
+  providerProductId String   @map("provider_product_id")
+  price             Decimal  @db.Decimal(10, 2)
+  previousPrice     Decimal? @map("previous_price") @db.Decimal(10, 2)
+  changedByUserId   String   @map("changed_by_user_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  providerProduct ProviderProduct @relation(fields: [providerProductId], references: [id], onDelete: Restrict)
+  changedBy       User            @relation(fields: [changedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([providerProductId, createdAt])
+  @@map("provider_product_price_history")
 }
 
 // ─── PEDIDOS ─────────────────────────────────────────────────────────────────

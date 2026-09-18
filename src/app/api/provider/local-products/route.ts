@@ -10,6 +10,8 @@ import {
   createLocalProduct,
 } from "@/lib/services/local-product.service";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+import { methodNotAllowedDeleteProduct } from "@/lib/api/method-not-allowed";
+import { OfferValidationError } from "@/lib/catalog/offer";
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,9 +34,16 @@ export async function POST(request: NextRequest) {
     if (err instanceof CatalogNotFoundError || err instanceof ProviderNotFoundError) {
       return apiError(err.message, 404);
     }
+    if (err instanceof OfferValidationError) {
+      return apiError(err.message, 400, err.details);
+    }
     if (err instanceof z.ZodError) {
       return apiError("Validation failed", 400, fromZodError(err));
     }
     return handleRouteError(err);
   }
+}
+
+export async function DELETE() {
+  return methodNotAllowedDeleteProduct("POST", "provider");
 }

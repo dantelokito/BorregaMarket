@@ -78,7 +78,7 @@ export function PriceInput({ value, unit, onSave, disabled }: PriceInputProps) {
       onClick={() => !disabled && setEditing(true)}
       disabled={disabled}
       className="group flex items-center gap-1.5 text-left text-sm text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-[var(--brand)] rounded"
-      aria-label={value ? `Precio $${value}, clic para editar` : "Asignar precio"}
+      aria-label={value ? `Precio de tu frutería $${value}, clic para editar` : "Asignar precio de tu frutería"}
     >
       {saved && <Check size={14} className="text-green-600" aria-hidden />}
       <span>

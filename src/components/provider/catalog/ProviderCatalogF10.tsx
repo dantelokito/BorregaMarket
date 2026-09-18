@@ -25,9 +25,20 @@ import { SectionBlock } from "./SectionBlock";
 import { ScopeBadge } from "./ScopeBadge";
 import { ProductImageDropzone } from "./ProductImageDropzone";
 import { ProductFormDrawer } from "./ProductFormDrawer";
+import { ArchivedTray } from "./ArchivedTray";
+import { PriceHistoryList } from "./PriceHistoryList";
 import { CatalogRowThumb } from "@/components/inventory/CatalogRowThumb";
 import { InventoryCapacityBar } from "@/components/inventory/InventoryCapacityBar";
 import { PosImagesToggle } from "@/components/inventory/PosImagesToggle";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import {
+  archiveProviderProduct,
+  getPriceHistory,
+  patchOfferPrice,
+  restoreProviderProduct,
+} from "@/lib/api/provider-f13";
+import { effectiveSaleUnit, staleOfferCopy } from "@/lib/catalog/f13";
+import type { PriceHistoryRow } from "@/lib/api/types";
 
 export function ProviderCatalogF10({
   catalog,
@@ -37,6 +48,10 @@ export function ProviderCatalogF10({
   onPosShowImagesChange,
   posImagesBusy,
   posImagesError,
+  archived,
+  archivedLoading,
+  archivedError,
+  onReloadArchived,
 }: {
   catalog: CatalogItem[];
   sections: ProviderSection[];
@@ -45,6 +60,10 @@ export function ProviderCatalogF10({
   onPosShowImagesChange: (next: boolean) => void;
   posImagesBusy?: boolean;
   posImagesError?: string;
+  archived: CatalogItem[];
+  archivedLoading: boolean;
+  archivedError: string;
+  onReloadArchived: () => Promise<void>;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<CatalogItem | null>(null);
@@ -55,6 +74,12 @@ export function ProviderCatalogF10({
   const [rowBusy, setRowBusy] = useState<Record<string, boolean>>({});
   const [rowOk, setRowOk] = useState<Record<string, boolean>>({});
   const [imageTarget, setImageTarget] = useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<CatalogItem | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [historyItem, setHistoryItem] = useState<CatalogItem | null>(null);
+  const [historyRows, setHistoryRows] = useState<PriceHistoryRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
 
   const groups = useMemo(
     () => groupCatalogBySection(catalog, sections),
@@ -133,16 +158,29 @@ export function ProviderCatalogF10({
   }
 
   async function savePrice(item: CatalogItem, price: number) {
-    if (item.scope === "LOCAL" && item.providerProductId) {
-      await patchLocalProduct(item.providerProductId, { price });
-    } else {
-      await updateProduct({
-        productId: item.product.id,
-        isAvailable: item.isAvailable,
-        price,
-      });
-    }
+    await patchOfferPrice(item.product.id, price.toFixed(2));
     await onReload();
+  }
+
+  async function loadHistory(item: CatalogItem) {
+    if (!item.providerProductId) {
+      setHistoryItem(item);
+      setHistoryRows([]);
+      setHistoryError("");
+      return;
+    }
+    setHistoryItem(item);
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const { data } = await getPriceHistory(item.providerProductId);
+      setHistoryRows(data);
+    } catch (err) {
+      setHistoryError(staleOfferCopy(mapF10ApiError(err, "business")));
+      setHistoryRows([]);
+    } finally {
+      setHistoryLoading(false);
+    }
   }
 
   async function assignSection(item: CatalogItem, sectionId: string) {
@@ -163,7 +201,6 @@ export function ProviderCatalogF10({
 
   function renderRow(item: CatalogItem) {
     const key = item.product.id;
-    const local = item.scope === "LOCAL";
     return (
       <div
         key={key}
@@ -181,11 +218,21 @@ export function ProviderCatalogF10({
                 <p className="font-medium">{item.product.name}</p>
                 <ScopeBadge scope={item.scope} />
               </div>
-              <PriceInput
-                value={item.price}
-                unit={item.product.unit}
-                onSave={(price) => savePrice(item, price)}
-              />
+              <div className="mt-1 w-full min-w-[10rem]">
+                <span className="sr-only">Precio de tu frutería</span>
+                <PriceInput
+                  value={item.price}
+                  unit={item.effectiveSaleUnit ?? effectiveSaleUnit(item.saleUnit, item.product.unit)}
+                  onSave={(price) => savePrice(item, price)}
+                />
+                <button
+                  type="button"
+                  className="mt-1 min-h-11 text-sm text-[var(--brand)] underline-offset-2 hover:underline"
+                  onClick={() => void loadHistory(item)}
+                >
+                  Historial
+                </button>
+              </div>
             </div>
           </div>
           {sections.length > 0 && (
@@ -227,19 +274,17 @@ export function ProviderCatalogF10({
               Foto
             </button>
           )}
-          {local && (
-            <Button
-              type="button"
-              variant="secondary"
-              className="min-h-11"
-              onClick={() => {
-                setEditing(item);
-                setDrawerOpen(true);
-              }}
-            >
-              Editar
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-11"
+            onClick={() => {
+              setEditing(item);
+              setDrawerOpen(true);
+            }}
+          >
+            Editar
+          </Button>
           <button
             type="button"
             onClick={() => void toggleProduct(item)}
@@ -261,6 +306,14 @@ export function ProviderCatalogF10({
             )}
             {item.isAvailable ? "Activo" : "Inactivo"}
           </button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-11"
+            onClick={() => setArchiveTarget(item)}
+          >
+            Eliminar
+          </Button>
         </div>
       </div>
     );
@@ -427,6 +480,48 @@ export function ProviderCatalogF10({
         }}
         onSaved={onReload}
       />
+      <ArchivedTray
+        items={archived}
+        loading={archivedLoading}
+        error={archivedError}
+        onRetry={() => void onReloadArchived()}
+        restoringId={restoringId}
+        onRestore={async (item) => {
+          setRestoringId(item.product.id);
+          try {
+            await restoreProviderProduct(item.product.id);
+            await Promise.all([onReload(), onReloadArchived()]);
+          } finally {
+            setRestoringId(null);
+          }
+        }}
+      />
+      <ConfirmDialog
+        open={Boolean(archiveTarget)}
+        title="Quitar de tu catálogo"
+        description="Se oculta de tu catálogo. El administrador sigue viendo el producto."
+        confirmLabel="Quitar de catálogo"
+        onCancel={() => setArchiveTarget(null)}
+        onConfirm={() => {
+          const item = archiveTarget;
+          setArchiveTarget(null);
+          if (!item) return;
+          void archiveProviderProduct(item.product.id).then(() =>
+            Promise.all([onReload(), onReloadArchived()])
+          );
+        }}
+      />
+      {historyItem ? (
+        <PriceHistoryList
+          name={historyItem.product.name}
+          rows={historyRows}
+          loading={historyLoading}
+          error={historyError}
+          empty={!historyLoading && !historyError && historyRows.length === 0}
+          onRetry={() => void loadHistory(historyItem)}
+          onClose={() => setHistoryItem(null)}
+        />
+      ) : null}
     </div>
   );
 }

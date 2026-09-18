@@ -5,6 +5,9 @@ export interface InventoryItem {
   productId: string;
   name: string;
   unit: string;
+  masterUnit?: string;
+  saleUnit?: string | null;
+  effectiveSaleUnit?: string;
   isAvailable: boolean;
   imageUrl: string | null;
   onHand: string;
@@ -30,6 +33,7 @@ export interface PatchInventoryInput {
   alertThresholdPercent?: number;
   alertEnabled?: boolean;
   boxContentFactor?: string | null;
+  confirmDiscard?: boolean;
 }
 
 export async function patchInventoryItem(providerProductId: string, input: PatchInventoryInput) {
