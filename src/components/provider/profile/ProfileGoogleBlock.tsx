@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api/client";
 import type { PatchProviderSettingsInput } from "@/lib/api/provider-panel";
 import type { ProviderBusiness } from "@/lib/api/types";
+import { safeHttpHref } from "@/lib/provider/safe-http-href";
 
 export function ProfileGoogleBlock({
   business,
@@ -50,6 +51,8 @@ export function ProfileGoogleBlock({
     }
   }
 
+  const mapsHref = safeHttpHref(mapsUrl);
+
   return (
     <section id="google" className="mb-8 space-y-4 rounded-xl border border-gray-200 bg-white p-6">
       <h2 className="text-lg font-semibold text-slate-900">Google Maps</h2>
@@ -81,11 +84,11 @@ export function ProfileGoogleBlock({
           disabled={locked}
           aria-describedby={locked ? "google-lock-hint" : undefined}
         />
-        {!locked && mapsUrl.trim() ? (
+        {!locked && mapsHref ? (
           <a
-            href={mapsUrl.trim()}
+            href={mapsHref}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--brand)] hover:underline"
           >
             Abrir en Google Maps

@@ -3,6 +3,7 @@ import { isProviderSubNavCurrent, providerSubNavTabs } from "@/lib/provider/subn
 import { canPublishPrice, needsPriceToActivate } from "@/lib/catalog/activate-price";
 import { barHeight, chartMax, seriesToTrendPoints, sourceToMixPoints } from "@/lib/reports/unified-chart";
 import { defaultHoursDraft, hoursRowError, toOpeningHoursPayload } from "@/lib/provider/hours-editor";
+import { safeHttpHref } from "@/lib/provider/safe-http-href";
 import { providerReportPdfRangeUrl } from "@/lib/api/provider-ops";
 import { MOVEMENT_KIND_LABEL, parseAdjustmentDelta, shrinkageReasonLabel } from "@/lib/inventory/movements-ui";
 
@@ -85,5 +86,13 @@ describe("F14 movimientos UI", () => {
     expect(shrinkageReasonLabel("CADUCIDAD")).toBe("Caducidad");
     expect(parseAdjustmentDelta(5, 8)).toBe(-3);
     expect(parseAdjustmentDelta(0, 2)).toBe(-2);
+  });
+});
+
+describe("F14 href Google Maps", () => {
+  it("solo admite http(s) y rechaza javascript:", () => {
+    expect(safeHttpHref("https://maps.google.com/?q=mty")).toBe("https://maps.google.com/?q=mty");
+    expect(safeHttpHref("javascript:alert(1)")).toBeNull();
+    expect(safeHttpHref("not a url")).toBeNull();
   });
 });
