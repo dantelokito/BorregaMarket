@@ -1,29 +1,94 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CircleAlert, Package, Plus } from "lucide-react";
 import { ActiveStoreEyebrow } from "@/components/provider/ActiveStoreEyebrow";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { DateRangeFields } from "@/components/provider/reports/DateRangeFields";
 import { useInventory, useInventoryMutations } from "@/hooks/useInventory";
+import { useInventoryMovements } from "@/hooks/useInventoryMovements";
 import { useProviderScope } from "@/hooks/useProviderScope";
 import { formatQty } from "@/lib/format";
 import { parseQtyString } from "@/lib/inventory/capacity";
-import type { InventoryItem } from "@/lib/api/inventory";
+import type { InventoryItem, InventoryMovementKind } from "@/lib/api/inventory";
+import { ymdInTimeZone } from "@/lib/timezone";
+import { validateDateRange } from "@/lib/reports/date-range";
 import { CatalogRowThumb } from "./CatalogRowThumb";
 import { EncargarReserveChip } from "./EncargarReserveChip";
 import { InventoryCapacityBar } from "./InventoryCapacityBar";
 import { InventorySkuSheet } from "./InventorySkuSheet";
+import { InventorySubTabs } from "./InventorySubTabs";
 import { LowStockBadge } from "./LowStockBadge";
+import { MermaSheet } from "./MermaSheet";
+import { CountAdjustSheet } from "./CountAdjustSheet";
+import { MovementsTable } from "./MovementsTable";
 import { StockEntrySheet } from "./StockEntrySheet";
 
-export function InventoryPageClient() {
+function InventoryPageInner() {
   const { activeName } = useProviderScope();
   const { items, loading, error, refetch } = useInventory();
   const mutations = useInventoryMutations(refetch);
   const [entryItem, setEntryItem] = useState<InventoryItem | null>(null);
+  const [mermaItem, setMermaItem] = useState<InventoryItem | null>(null);
+  const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
   const [fichaItem, setFichaItem] = useState<InventoryItem | null>(null);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const tab = searchParams.get("tab") === "movimientos" ? "movimientos" : "existencias";
+  const today = ymdInTimeZone(new Date());
+  const kindRaw = searchParams.get("kind");
+  const kind: InventoryMovementKind | undefined =
+    kindRaw === "ENTRADA" || kindRaw === "MERMA" || kindRaw === "AJUSTE" ? kindRaw : undefined;
+  const from = searchParams.get("from") ?? "";
+  const to = searchParams.get("to") ?? "";
+  const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+  const rangeError = from && to ? validateDateRange(from, to, today) : from || to ? "Indica inicio y fin juntos" : null;
+
+  const movementFilters = useMemo(
+    () => ({
+      kind,
+      from: from && to && !rangeError ? from : undefined,
+      to: from && to && !rangeError ? to : undefined,
+      page,
+      enabled: tab === "movimientos",
+    }),
+    [kind, from, to, page, tab, rangeError]
+  );
+  const movements = useInventoryMovements(movementFilters);
+
+  function pushMovements(next: { kind?: string; from?: string; to?: string; page?: number }) {
+    const params = new URLSearchParams();
+    params.set("tab", "movimientos");
+    const nextKind = next.kind === undefined ? kindRaw : next.kind;
+    if (nextKind) params.set("kind", nextKind);
+    const nextFrom = next.from ?? from;
+    const nextTo = next.to ?? to;
+    if (nextFrom) params.set("from", nextFrom);
+    if (nextTo) params.set("to", nextTo);
+    params.set("page", String(next.page ?? 1));
+    router.replace(`/proveedor/inventario?${params.toString()}`, { scroll: false });
+  }
+
+  const actionButtons = (item: InventoryItem, fullWidth?: boolean) => (
+    <div className={`flex flex-col gap-2 ${fullWidth ? "" : ""}`}>
+      <Button type="button" className="min-h-11" onClick={() => setEntryItem(item)}>
+        <Plus size={16} aria-hidden />
+        Registrar entrada
+      </Button>
+      <Button type="button" variant="secondary" className="min-h-11" onClick={() => setMermaItem(item)}>
+        Registrar merma
+      </Button>
+      <Button type="button" variant="ghost" className="min-h-11" onClick={() => setAdjustItem(item)}>
+        Ajuste por conteo
+      </Button>
+      <Button type="button" variant="ghost" className="min-h-11" onClick={() => setFichaItem(item)}>
+        Editar ficha
+      </Button>
+    </div>
+  );
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
@@ -32,8 +97,53 @@ export function InventoryPageClient() {
       <p className="mt-1 text-sm text-slate-500">
         Existencias de esta frutería. No se comparte con otras sucursales.
       </p>
+      <InventorySubTabs current={tab} />
 
-      {loading ? (
+      {tab === "movimientos" ? (
+        <>
+          <p className="mt-4 text-sm text-slate-600">
+            Solo ves entradas, mermas y ajustes que registraste. Las ventas del POS y los pedidos
+            Encargar no aparecen aquí.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {([undefined, "ENTRADA", "MERMA", "AJUSTE"] as const).map((value) => {
+              const label = value ? { ENTRADA: "Entrada", MERMA: "Merma", AJUSTE: "Ajuste" }[value] : "Todos";
+              const active = (value ?? "") === (kind ?? "");
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  className={`min-h-11 rounded-full px-4 text-sm font-medium ${
+                    active ? "bg-[var(--brand)] text-white" : "bg-slate-100 text-slate-700"
+                  }`}
+                  onClick={() => pushMovements({ kind: value ?? "", page: 1 })}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4 max-w-xl">
+            <DateRangeFields
+              from={from}
+              to={to}
+              max={today}
+              error={rangeError}
+              onChange={(next) => pushMovements({ from: next.from, to: next.to, page: 1 })}
+            />
+          </div>
+          <MovementsTable
+            rows={movements.rows}
+            loading={movements.loading}
+            error={rangeError ?? movements.error}
+            page={page}
+            totalPages={movements.totalPages}
+            onRetry={() => void movements.refetch()}
+            onPage={(next) => pushMovements({ page: next })}
+            onGoStock={() => router.replace("/proveedor/inventario")}
+          />
+        </>
+      ) : loading ? (
         <ul className="mt-6 space-y-3" aria-busy="true" aria-label="Cargando inventario">
           {Array.from({ length: 6 }).map((_, i) => (
             <li key={i} className="h-20 animate-pulse rounded-xl bg-gray-200" />
@@ -103,21 +213,7 @@ export function InventoryPageClient() {
                     <td className="px-4 py-3">
                       <EncargarReserveChip reserved={item.reserved} unit={item.unit} />
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-2">
-                        <Button
-                          type="button"
-                          className="min-h-11"
-                          onClick={() => setEntryItem(item)}
-                        >
-                          <Plus size={16} aria-hidden />
-                          Registrar entrada
-                        </Button>
-                        <Button type="button" variant="ghost" className="min-h-11" onClick={() => setFichaItem(item)}>
-                          Editar ficha
-                        </Button>
-                      </div>
-                    </td>
+                    <td className="px-4 py-3">{actionButtons(item)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -143,21 +239,7 @@ export function InventoryPageClient() {
                   <LowStockBadge show={item.lowStockAlert} />
                   <EncargarReserveChip reserved={item.reserved} unit={item.unit} />
                 </div>
-                <Button
-                  type="button"
-                  className="mt-4 min-h-11 w-full"
-                  onClick={() => setEntryItem(item)}
-                >
-                  Registrar entrada
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="mt-2 min-h-11 w-full"
-                  onClick={() => setFichaItem(item)}
-                >
-                  Editar ficha
-                </Button>
+                <div className="mt-4">{actionButtons(item, true)}</div>
               </li>
             ))}
           </ul>
@@ -178,6 +260,22 @@ export function InventoryPageClient() {
           }
         }}
       />
+      <MermaSheet
+        item={mermaItem}
+        open={Boolean(mermaItem)}
+        busy={mutations.busy}
+        apiError={mutations.formError}
+        onClose={() => setMermaItem(null)}
+        onSubmit={(input) => mutations.submitShrinkage(mermaItem!.providerProductId, input)}
+      />
+      <CountAdjustSheet
+        item={adjustItem}
+        open={Boolean(adjustItem)}
+        busy={mutations.busy}
+        apiError={mutations.formError}
+        onClose={() => setAdjustItem(null)}
+        onSubmit={(input) => mutations.submitAdjustment(adjustItem!.providerProductId, input)}
+      />
       <InventorySkuSheet
         item={fichaItem}
         open={Boolean(fichaItem)}
@@ -188,5 +286,20 @@ export function InventoryPageClient() {
         onSubmit={(input) => mutations.submitFicha(fichaItem!.providerProductId, input)}
       />
     </div>
+  );
+}
+
+export function InventoryPageClient() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-7xl px-4 py-8">
+          <div className="h-10 w-48 animate-pulse rounded bg-gray-200" />
+          <div className="mt-6 h-20 animate-pulse rounded-xl bg-gray-200" />
+        </div>
+      }
+    >
+      <InventoryPageInner />
+    </Suspense>
   );
 }

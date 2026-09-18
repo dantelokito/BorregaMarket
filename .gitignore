@@ -45,3 +45,6 @@ next-env.d.ts
 # prisma
 /prisma/*.db
 /prisma/*.db-journal
+
+# graphify knowledge graph (AST rebuild: graphify update .)
+/graphify-out/

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isValidGoogleMapsUrl, isValidGooglePlaceId } from "@/lib/validation/google-maps";
+import { monterreyLatSchema, monterreyLngSchema } from "@/lib/validators/geo";
 import {
   BRAND_PAIR_MESSAGE,
   HEX_FORMAT_MESSAGE,
@@ -154,6 +155,15 @@ export const patchProviderSettingsSchema = z
     posShowImages: z
       .boolean({ invalid_type_error: "Debe ser verdadero o falso" })
       .optional(),
+    businessName: z.string().trim().min(2).max(80).optional(),
+    address: z.string().trim().min(1).max(200).optional(),
+    city: z.string().trim().min(1).max(80).optional(),
+    phone: z.string().trim().min(1).max(20).optional(),
+    description: z
+      .union([z.string().trim().max(500), z.null()])
+      .optional(),
+    latitude: monterreyLatSchema.optional(),
+    longitude: monterreyLngSchema.optional(),
     id: z.string().optional(),
     providerId: z.string().optional(),
     openingHours: openingHoursSchema,
@@ -166,6 +176,15 @@ export const patchProviderSettingsSchema = z
         code: z.ZodIssueCode.custom,
         path: ["posShowImages"],
         message: "Debe ser verdadero o falso",
+      });
+    }
+    const hasLat = data.latitude !== undefined;
+    const hasLng = data.longitude !== undefined;
+    if (hasLat !== hasLng) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: hasLat ? ["longitude"] : ["latitude"],
+        message: "latitude y longitude deben enviarse juntos",
       });
     }
   });

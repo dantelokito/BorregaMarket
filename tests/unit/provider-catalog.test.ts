@@ -209,4 +209,70 @@ describe("updateProviderSettings brand", () => {
     ).rejects.toBeInstanceOf(GoogleReviewsLockedError);
     expect(prismaMock.provider.update).not.toHaveBeenCalled();
   });
+
+  it("moves the pin without writing isVerified", async () => {
+    prismaMock.provider.findFirst.mockResolvedValue({
+      id: "p1",
+      userId: "u2",
+      isVerified: true,
+      verifiedAt: new Date("2026-08-01T18:00:00.000Z"),
+      googlePlaceId: null,
+      googleMapsUrl: null,
+      googleReviewsEnabled: false,
+      preparationTimeMinutes: 20,
+      offersDelivery: false,
+      businessName: "El Paraíso",
+      address: "Av. 1",
+      city: "Monterrey",
+      latitude: 25.67,
+      longitude: -100.31,
+      phone: "+5281",
+      description: null,
+      isActive: true,
+      logoUrl: null,
+      coverUrl: null,
+    });
+    prismaMock.provider.update.mockResolvedValue({
+      id: "p1",
+      businessName: "El Paraíso",
+      address: "Av. 1",
+      city: "Monterrey",
+      latitude: 25.6714,
+      longitude: -100.3089,
+      phone: "+5281",
+      description: null,
+      isVerified: true,
+      verifiedAt: new Date("2026-08-01T18:00:00.000Z"),
+      isActive: true,
+      logoUrl: null,
+      coverUrl: null,
+      preparationTimeMinutes: 20,
+      offersDelivery: false,
+      googlePlaceId: null,
+      googleMapsUrl: null,
+      googleReviewsEnabled: false,
+    });
+
+    const result = await updateProviderSettings({
+      userId: "u2",
+      input: { latitude: 25.6714, longitude: -100.3089 },
+    });
+
+    expect(prismaMock.provider.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({
+          isVerified: expect.anything(),
+          verifiedAt: expect.anything(),
+        }),
+      })
+    );
+    const payload = prismaMock.provider.update.mock.calls[0][0].data as Record<
+      string,
+      unknown
+    >;
+    expect(payload).not.toHaveProperty("isVerified");
+    expect(payload).not.toHaveProperty("verifiedAt");
+    expect(payload.latitude).toBe(25.6714);
+    expect(result.isVerified).toBe(true);
+  });
 });

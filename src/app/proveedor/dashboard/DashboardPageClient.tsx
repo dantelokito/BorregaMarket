@@ -8,13 +8,14 @@ import { ApiError } from "@/lib/api/client";
 import type { DashboardSummary, OrderStatus } from "@/lib/api/types";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { QuickSaleBadge } from "@/components/ui/QuickSaleBadge";
-import { formatCurrency, formatQty } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { ORDER_STATUS_LABEL } from "@/lib/orders/labels";
 import { parseDashboardView } from "@/lib/reports/period";
 import { currentMonthShortcut } from "@/lib/reports/date-range";
+import { productsToTopPoints, seriesToTrendPoints, sourceToMixPoints } from "@/lib/reports/unified-chart";
 import { DashboardViewSwitcher } from "@/components/provider/reports/DashboardViewSwitcher";
 import { ReportsView } from "@/components/provider/reports/ReportsView";
+import { UnifiedProviderChart } from "@/components/provider/reports/UnifiedProviderChart";
 import { ActiveStoreEyebrow } from "@/components/provider/ActiveStoreEyebrow";
 
 function KpiCard({ label, amount, count }: { label: string; amount: string; count: number }) {
@@ -26,70 +27,6 @@ function KpiCard({ label, amount, count }: { label: string; amount: string; coun
         {count} {count === 1 ? "orden" : "órdenes"}
       </p>
     </div>
-  );
-}
-
-function BarChartIlustrativo({
-  series,
-}: {
-  series: { date: string; salesTotal: string; orderCount: number }[];
-}) {
-  const max = Math.max(...series.map((s) => Number(s.salesTotal)), 1);
-  const label = `Ventas de los últimos 7 días. Máximo ${formatCurrency(max)}.`;
-
-  return (
-    <figure>
-      <svg
-        role="img"
-        aria-label={label}
-        viewBox="0 0 560 180"
-        className="h-48 w-full"
-      >
-        {series.map((s, i) => {
-          const h = (Number(s.salesTotal) / max) * 140;
-          const x = 24 + i * 76;
-          return (
-            <g key={s.date}>
-              <rect
-                className="dash-bar"
-                x={x}
-                y={150 - h}
-                width={48}
-                height={h}
-                rx={4}
-                fill="var(--brand)"
-              />
-              <text x={x + 24} y={170} textAnchor="middle" fontSize="12" fill="#64748B">
-                {s.date.slice(5)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      <details className="mt-2 text-sm">
-        <summary className="cursor-pointer text-[var(--brand)]">Ver datos en tabla</summary>
-        <table className="mt-2 w-full text-left text-sm">
-          <thead>
-            <tr>
-              <th className="py-1">Fecha</th>
-              <th>Ventas</th>
-              <th>Órdenes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {series.map((s) => (
-              <tr key={s.date}>
-                <td>
-                  <time dateTime={s.date}>{s.date}</time>
-                </td>
-                <td className="tabular-nums">{formatCurrency(s.salesTotal)}</td>
-                <td className="tabular-nums">{s.orderCount}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
-    </figure>
   );
 }
 
@@ -177,47 +114,25 @@ function DashboardSummaryView() {
         </ul>
       </section>
 
-      <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-3 text-lg font-semibold">Últimos 7 días</h2>
-        <BarChartIlustrativo series={data.series7d} />
-      </section>
-
-      <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-3 text-lg font-semibold">Top 5 productos (30 días)</h2>
-        <ol className="space-y-2">
-          {data.topProducts.map((p, i) => (
-            <li key={`${p.providerProductId ?? "qs"}-${i}`} className="flex justify-between gap-2 text-sm">
-              <span>
-                {i + 1}. {p.providerProductId ? p.name : <QuickSaleBadge />}
-                {!p.providerProductId && <span className="ml-2">{p.name}</span>}
-              </span>
-              <span className="tabular-nums">
-                {formatQty(p.quantitySum)} · {formatCurrency(p.salesTotal)}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-3 text-lg font-semibold">App vs Mostrador (30 días)</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <p className="text-sm">
-            App:{" "}
-            <span className="font-semibold tabular-nums">
-              {formatCurrency(data.kpis.bySource.marketplace.salesTotal)}
-            </span>{" "}
-            ({data.kpis.bySource.marketplace.orderCount} órdenes)
-          </p>
-          <p className="text-sm">
-            Mostrador:{" "}
-            <span className="font-semibold tabular-nums">
-              {formatCurrency(data.kpis.bySource.pos.salesTotal)}
-            </span>{" "}
-            ({data.kpis.bySource.pos.orderCount} órdenes)
-          </p>
+      <div className="mt-8 grid gap-4 lg:grid-cols-2">
+        <div className="lg:col-span-2">
+          <UnifiedProviderChart
+            variant="trend"
+            title="Últimos 7 días"
+            points={seriesToTrendPoints(data.series7d)}
+          />
         </div>
-      </section>
+        <UnifiedProviderChart
+          variant="mix"
+          title="Mix de canal (30 días)"
+          points={sourceToMixPoints(data.kpis.bySource)}
+        />
+        <UnifiedProviderChart
+          variant="top"
+          title="Top productos (30 días)"
+          points={productsToTopPoints(data.topProducts)}
+        />
+      </div>
     </div>
   );
 }

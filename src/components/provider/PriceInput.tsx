@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Check } from "lucide-react";
 
 interface PriceInputProps {
@@ -15,20 +15,26 @@ export function PriceInput({ value, unit, onSave, disabled }: PriceInputProps) {
   const [inputValue, setInputValue] = useState(value?.toString() ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     setInputValue(value?.toString() ?? "");
   }, [value]);
 
   async function handleSave() {
+    if (savingRef.current) return;
+    savingRef.current = true;
+
     const parsed = parseFloat(inputValue);
     if (isNaN(parsed) || parsed <= 0) {
+      savingRef.current = false;
       setInputValue(value?.toString() ?? "");
       setEditing(false);
       return;
     }
 
     if (parsed === value) {
+      savingRef.current = false;
       setEditing(false);
       return;
     }
@@ -39,6 +45,7 @@ export function PriceInput({ value, unit, onSave, disabled }: PriceInputProps) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
+      savingRef.current = false;
       setSaving(false);
       setEditing(false);
     }
@@ -56,7 +63,10 @@ export function PriceInput({ value, unit, onSave, disabled }: PriceInputProps) {
           onChange={(e) => setInputValue(e.target.value)}
           onBlur={handleSave}
           onKeyDown={(e) => {
-            if (e.key === "Enter") handleSave();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void handleSave();
+            }
             if (e.key === "Escape") {
               setInputValue(value?.toString() ?? "");
               setEditing(false);

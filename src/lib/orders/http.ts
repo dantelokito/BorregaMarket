@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { AuthError } from "@/lib/auth/session";
-import { apiCodedError, apiError, handleRouteError } from "@/lib/api/response";
+import { apiCodedError, apiError, handleRouteError, type FieldError } from "@/lib/api/response";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
 import { AddressNotFoundError } from "@/lib/services/address.service";
 import {
@@ -39,6 +39,19 @@ export function handleOrderRouteError(err: unknown): NextResponse {
   }
   if (err instanceof OrderValidationError) {
     return apiError(err.message, 400, err.details);
+  }
+  if (
+    err instanceof Error &&
+    err.name === "InventoryNegativeError" &&
+    "code" in err
+  ) {
+    const details = "details" in err ? (err as { details?: FieldError[] }).details : undefined;
+    return apiCodedError(
+      String((err as { code: string }).code),
+      err.message,
+      400,
+      details
+    );
   }
   if (err instanceof AddressNotFoundError) {
     return apiError(err.message, 404);

@@ -73,6 +73,20 @@ enum InventoryReceiveAs {
   BOX
 }
 
+enum InventoryEntryKind {
+  ENTRADA
+  MERMA
+  AJUSTE
+}
+
+enum InventoryShrinkageReason {
+  CADUCIDAD
+  DANO
+  ROBO
+  MUESTRA
+  OTRO
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -269,16 +283,21 @@ model ProviderProduct {
 }
 
 model InventoryEntry {
-  id                String             @id @default(cuid())
-  providerProductId String             @map("provider_product_id")
-  quantity          Decimal            @db.Decimal(12, 3)
-  receiveAs         InventoryReceiveAs @map("receive_as")
-  appliedDelta      Decimal            @map("applied_delta") @db.Decimal(12, 3)
-  createdAt         DateTime           @default(now()) @map("created_at")
+  id                String                    @id @default(cuid())
+  providerProductId String                    @map("provider_product_id")
+  kind              InventoryEntryKind        @default(ENTRADA)
+  quantity          Decimal                   @db.Decimal(12, 3)
+  receiveAs         InventoryReceiveAs?       @map("receive_as")
+  appliedDelta      Decimal                   @map("applied_delta") @db.Decimal(12, 3)
+  onHandAfter       Decimal?                  @map("on_hand_after") @db.Decimal(12, 3)
+  reason            InventoryShrinkageReason?
+  note              String?                   @db.VarChar(200)
+  createdAt         DateTime                  @default(now()) @map("created_at")
 
   providerProduct ProviderProduct @relation(fields: [providerProductId], references: [id], onDelete: Restrict)
 
   @@index([providerProductId, createdAt])
+  @@index([kind, createdAt])
   @@map("inventory_entries")
 }
 

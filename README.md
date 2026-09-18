@@ -2,7 +2,7 @@
 
 Marketplace open source para **fruterías, verdulerías y productores agrícolas** en México. El objetivo es que un cliente encuentre negocio fresco cerca, compare y contacte o pida directo al proveedor — sin intermediarios.
 
-**Versión:** 0.13.0 · Licencia [MIT](./LICENSE)
+**Versión:** 0.14.0 · Licencia [MIT](./LICENSE)
 
 ## Qué puedes hacer
 
@@ -35,7 +35,7 @@ npm run dev
 
 Abre [http://localhost:8080](http://localhost:8080).
 
-En Windows, detén `next dev` si `prisma generate` o `migrate` fallan (EPERM en el query engine). Tras pull F13: `npx prisma migrate deploy` (archivo de oferta, `sale_unit`, entradas, historial de precio). Cloudinary no es Must. No hay variables de entorno Must nuevas.
+En Windows, detén `next dev` si `prisma generate` o `migrate` fallan (EPERM en el query engine). Tras pull F14: `npx prisma migrate deploy` (merma/ajuste aditivos en `InventoryEntry.kind`, `on_hand_after`, motivo y nota). Cloudinary no es Must. No hay variables de entorno Must nuevas.
 
 ### Cuentas demo (solo local)
 
@@ -85,9 +85,10 @@ Next.js 15, React 19, Tailwind CSS 4, Prisma 6, PostgreSQL 15+, JWT + bcrypt, Le
 | `/fruteria/[id]` | Detalle y contacto | Público |
 | `/carrito` | Pedido para recoger | CLIENT |
 | `/cuenta` | Perfil y direcciones | CLIENT |
-| `/proveedor/*` | Catálogo, inventario, POS, órdenes, dashboard, reportes | PROVIDER |
-| `/proveedor/inventario` | Inventario blando (on_hand, umbral, caja, entradas) | PROVIDER |
-| `/proveedor/reportes-generales` | Reportes consolidados (solo N>1; inventario actual) | PROVIDER |
+| `/proveedor/*` | Catálogo, inventario, POS, órdenes, dashboard, reportes, Perfil | PROVIDER |
+| `/proveedor/perfil` | Identidad, datos de negocio, horarios, capacidades, pin AMM | PROVIDER |
+| `/proveedor/inventario` | Inventario blando, merma/ajuste aditivos, movimientos (sin kardex POS) | PROVIDER |
+| `/proveedor/reportes-generales` | Reportes consolidados (solo N>1; series y PDF `from`/`to`) | PROVIDER |
 | `/admin` | Catálogos, analítica, reseñas | ADMIN |
 
 Visión de producto: [PRODUCT.md](./PRODUCT.md). Cómo contribuir: [CONTRIBUTING.md](./CONTRIBUTING.md). Vulnerabilidades: [SECURITY.md](./SECURITY.md).

@@ -27,9 +27,9 @@ import { ProductImageDropzone } from "./ProductImageDropzone";
 import { ProductFormDrawer } from "./ProductFormDrawer";
 import { ArchivedTray } from "./ArchivedTray";
 import { PriceHistoryList } from "./PriceHistoryList";
+import { PriceRequiredDialog } from "./PriceRequiredDialog";
 import { CatalogRowThumb } from "@/components/inventory/CatalogRowThumb";
 import { InventoryCapacityBar } from "@/components/inventory/InventoryCapacityBar";
-import { PosImagesToggle } from "@/components/inventory/PosImagesToggle";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   archiveProviderProduct,
@@ -38,16 +38,13 @@ import {
   restoreProviderProduct,
 } from "@/lib/api/provider-f13";
 import { effectiveSaleUnit, staleOfferCopy } from "@/lib/catalog/f13";
+import { needsPriceToActivate } from "@/lib/catalog/activate-price";
 import type { PriceHistoryRow } from "@/lib/api/types";
 
 export function ProviderCatalogF10({
   catalog,
   sections,
   onReload,
-  posShowImages,
-  onPosShowImagesChange,
-  posImagesBusy,
-  posImagesError,
   archived,
   archivedLoading,
   archivedError,
@@ -56,10 +53,6 @@ export function ProviderCatalogF10({
   catalog: CatalogItem[];
   sections: ProviderSection[];
   onReload: () => Promise<void>;
-  posShowImages: boolean;
-  onPosShowImagesChange: (next: boolean) => void;
-  posImagesBusy?: boolean;
-  posImagesError?: string;
   archived: CatalogItem[];
   archivedLoading: boolean;
   archivedError: string;
@@ -80,6 +73,10 @@ export function ProviderCatalogF10({
   const [historyRows, setHistoryRows] = useState<PriceHistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [priceTarget, setPriceTarget] = useState<CatalogItem | null>(null);
+  const [priceBusy, setPriceBusy] = useState(false);
+  const [priceApiError, setPriceApiError] = useState("");
+  const [sectionConflict, setSectionConflict] = useState("");
 
   const groups = useMemo(
     () => groupCatalogBySection(catalog, sections),
@@ -118,6 +115,12 @@ export function ProviderCatalogF10({
 
   async function toggleProduct(item: CatalogItem) {
     const productId = item.product.id;
+    const turningOn = !item.isAvailable;
+    if (turningOn && needsPriceToActivate(item.price, true)) {
+      setPriceTarget(item);
+      setPriceApiError("");
+      return;
+    }
     setRowErrors((prev) => {
       const next = { ...prev };
       delete next[productId];
@@ -131,7 +134,7 @@ export function ProviderCatalogF10({
         await updateProduct({
           productId,
           isAvailable: !item.isAvailable,
-          price: item.price ?? 50,
+          ...(turningOn && item.price != null && item.price > 0 ? { price: item.price } : {}),
         });
       }
       await onReload();
@@ -335,12 +338,11 @@ export function ProviderCatalogF10({
         onNewSection={() => setNewSectionOpen(true)}
         addDisabled={sections.length === 0}
       />
-      <PosImagesToggle
-        checked={posShowImages}
-        onChange={onPosShowImagesChange}
-        disabled={posImagesBusy}
-        error={posImagesError}
-      />
+      {sectionConflict ? (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4" role="alert">
+          <p className="text-sm text-amber-950">{sectionConflict}</p>
+        </div>
+      ) : null}
 
       {newSectionOpen && (
         <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4">
@@ -411,10 +413,14 @@ export function ProviderCatalogF10({
             onDelete={async () => {
               try {
                 await deleteSection(group.section!.id);
+                setSectionConflict("");
                 await onReload();
               } catch (err) {
                 if (err instanceof ApiError && err.status === 409) {
-                  setSectionError("Mueve los productos a otra sección antes de eliminarla");
+                  setSectionConflict(
+                    err.message || "La sección tiene productos. Muévelos antes de eliminarla"
+                  );
+                  setSectionError("");
                 } else {
                   setSectionError(mapF10ApiError(err, "business"));
                 }
@@ -509,6 +515,39 @@ export function ProviderCatalogF10({
           void archiveProviderProduct(item.product.id).then(() =>
             Promise.all([onReload(), onReloadArchived()])
           );
+        }}
+      />
+      <PriceRequiredDialog
+        open={Boolean(priceTarget)}
+        productName={priceTarget?.product.name ?? ""}
+        busy={priceBusy}
+        apiError={priceApiError}
+        onCancel={() => {
+          setPriceTarget(null);
+          setPriceApiError("");
+        }}
+        onConfirm={async (price) => {
+          const item = priceTarget;
+          if (!item) return;
+          setPriceBusy(true);
+          setPriceApiError("");
+          try {
+            if (item.scope === "LOCAL" && item.providerProductId) {
+              await patchLocalProduct(item.providerProductId, { isAvailable: true, price });
+            } else {
+              await updateProduct({
+                productId: item.product.id,
+                isAvailable: true,
+                price,
+              });
+            }
+            await onReload();
+            setPriceTarget(null);
+          } catch (err) {
+            setPriceApiError(mapF10ApiError(err, "business"));
+          } finally {
+            setPriceBusy(false);
+          }
         }}
       />
       {historyItem ? (

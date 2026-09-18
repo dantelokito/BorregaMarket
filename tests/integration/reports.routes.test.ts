@@ -5,6 +5,7 @@ import type { ProviderReport } from "@/lib/api/types";
 
 const getSession = vi.fn();
 const getProviderReport = vi.fn();
+const getProviderReportRange = vi.fn();
 const renderProviderReportPdf = vi.fn();
 
 vi.mock("@/lib/providers/owned-provider", () => ({
@@ -24,7 +25,7 @@ vi.mock("@/lib/auth/session", async () => {
 
 vi.mock("@/lib/services/dashboard.service", () => ({
   getProviderReport: (...args: unknown[]) => getProviderReport(...args),
-  getProviderReportRange: vi.fn(),
+  getProviderReportRange: (...args: unknown[]) => getProviderReportRange(...args),
 }));
 
 vi.mock("@/lib/reports/pdf", async () => {
@@ -72,6 +73,16 @@ describe("provider reports routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getProviderReport.mockResolvedValue(emptyReport);
+    getProviderReportRange.mockResolvedValue({
+      ...emptyReport,
+      period: {
+        mode: "range",
+        from: "2026-09-01",
+        to: "2026-09-12",
+        fromUtc: "2026-09-01T06:00:00.000Z",
+        toUtc: "2026-09-13T06:00:00.000Z",
+      },
+    });
     renderProviderReportPdf.mockResolvedValue(Buffer.from("%PDF-1.4 empty"));
   });
 
@@ -173,5 +184,30 @@ describe("provider reports routes", () => {
     );
     const bytes = Buffer.from(await res.arrayBuffer());
     expect(bytes.subarray(0, 4).toString("utf8")).toBe("%PDF");
+  });
+
+  it("returns 200 PDF for from/to range and rejects mixed query", async () => {
+    getSession.mockReturnValue({
+      sub: "u2",
+      email: "p@test.com",
+      role: UserRole.PROVIDER,
+      name: "Carlos",
+    });
+    const mixed = await getReportPdf(
+      jsonRequest("/api/provider/reports.pdf?grain=day&date=2026-08-10&from=2026-09-01&to=2026-09-12")
+    );
+    expect(mixed.status).toBe(400);
+
+    const res = await getReportPdf(
+      jsonRequest("/api/provider/reports.pdf?from=2026-09-01&to=2026-09-12")
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/pdf");
+    expect(res.headers.get("content-disposition")).toBe(
+      'attachment; filename="reporte-frutas-el-paraiso-2026-09-01_2026-09-12.pdf"'
+    );
+    expect(getProviderReportRange).toHaveBeenCalledWith(
+      expect.objectContaining({ from: "2026-09-01", to: "2026-09-12" })
+    );
   });
 });

@@ -690,9 +690,29 @@ export async function updateProviderSettings(params: {
                 : params.input.openingHours,
           }
         : {}),
+      ...(params.input.businessName !== undefined
+        ? { businessName: params.input.businessName }
+        : {}),
+      ...(params.input.address !== undefined ? { address: params.input.address } : {}),
+      ...(params.input.city !== undefined ? { city: params.input.city } : {}),
+      ...(params.input.phone !== undefined ? { phone: params.input.phone } : {}),
+      ...(params.input.description !== undefined
+        ? { description: params.input.description }
+        : {}),
+      ...(params.input.latitude !== undefined ? { latitude: params.input.latitude } : {}),
+      ...(params.input.longitude !== undefined ? { longitude: params.input.longitude } : {}),
       ...brandData,
     },
   });
+
+  const mutatedBusiness: Record<string, unknown> = {};
+  if (params.input.businessName !== undefined) mutatedBusiness.businessName = updated.businessName;
+  if (params.input.address !== undefined) mutatedBusiness.address = updated.address;
+  if (params.input.city !== undefined) mutatedBusiness.city = updated.city;
+  if (params.input.phone !== undefined) mutatedBusiness.phone = updated.phone;
+  if (params.input.description !== undefined) mutatedBusiness.description = updated.description;
+  if (params.input.latitude !== undefined) mutatedBusiness.latitude = updated.latitude;
+  if (params.input.longitude !== undefined) mutatedBusiness.longitude = updated.longitude;
 
   await writeAuditLog({
     module: SystemModule.PROVIDERS,
@@ -710,6 +730,7 @@ export async function updateProviderSettings(params: {
             secondaryColor: updated.secondaryColor,
           }
         : {}),
+      ...mutatedBusiness,
     },
   });
 

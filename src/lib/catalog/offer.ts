@@ -78,6 +78,31 @@ export class OfferValidationError extends Error {
   }
 }
 
+export class InvalidOfferPriceError extends Error {
+  details() {
+    return [
+      {
+        field: "price",
+        message: "El precio debe ser mayor que cero para publicar la oferta",
+      },
+    ];
+  }
+  constructor(message = "Precio de venta inválido") {
+    super(message);
+    this.name = "InvalidOfferPriceError";
+  }
+}
+
+export function assertPublishablePrice(
+  nextPrice: Prisma.Decimal | string | number | null | undefined,
+  nextAvailable: boolean
+) {
+  if (!nextAvailable) return;
+  if (nextPrice == null || toDecimal(nextPrice).lte(0)) {
+    throw new InvalidOfferPriceError();
+  }
+}
+
 type Tx = Prisma.TransactionClient;
 
 export async function insertPriceHistory(

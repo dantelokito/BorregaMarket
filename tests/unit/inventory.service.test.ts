@@ -99,6 +99,7 @@ describe("inventory.service", () => {
       const tx = {
         inventoryEntry: { create: vi.fn().mockResolvedValue({ id: "ent1" }) },
         providerProduct: {
+          findUnique: prismaMock.providerProduct.findUnique,
           update: prismaMock.providerProduct.update,
         },
       };
@@ -127,7 +128,7 @@ describe("inventory.service", () => {
     });
     expect(prismaMock.providerProduct.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { onHand: { increment: expect.anything() } },
+        data: { onHand: expect.anything() },
       })
     );
     expect(row.onHand).toBe("21.000");

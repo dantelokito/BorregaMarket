@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { hasMaxDecimals } from "@/lib/money";
 
 const decimalString = z
   .union([z.string(), z.number()])
@@ -74,5 +75,56 @@ export const inventoryEntrySchema = z
   })
   .strict();
 
+export const shrinkageReasonSchema = z.enum([
+  "CADUCIDAD",
+  "DANO",
+  "ROBO",
+  "MUESTRA",
+  "OTRO",
+]);
+
+export const inventoryEntryKindSchema = z.enum(["ENTRADA", "MERMA", "AJUSTE"]);
+
+const noteSchema = z
+  .string()
+  .trim()
+  .max(200)
+  .optional()
+  .transform((value) => {
+    if (value === undefined) return undefined;
+    return value.length === 0 ? null : value;
+  });
+
+export const shrinkageSchema = z
+  .object({
+    quantity: decimalString.superRefine((value, ctx) => {
+      if (!/^-?\d+(\.\d+)?$/.test(value) || !hasMaxDecimals(value, 3) || Number(value) <= 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "La cantidad debe ser mayor que cero",
+        });
+      }
+    }),
+    reason: shrinkageReasonSchema,
+    note: noteSchema,
+  })
+  .strict();
+
+export const adjustmentSchema = z
+  .object({
+    countedOnHand: decimalString.superRefine((value, ctx) => {
+      if (!/^-?\d+(\.\d+)?$/.test(value) || !hasMaxDecimals(value, 3) || Number(value) < 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "El conteo debe ser mayor o igual a cero",
+        });
+      }
+    }),
+    note: noteSchema,
+  })
+  .strict();
+
 export type PatchInventoryInput = z.infer<typeof patchInventorySchema>;
 export type InventoryEntryInput = z.infer<typeof inventoryEntrySchema>;
+export type ShrinkageInput = z.infer<typeof shrinkageSchema>;
+export type AdjustmentInput = z.infer<typeof adjustmentSchema>;

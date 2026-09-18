@@ -1,8 +1,8 @@
 # LaBorregaMarket — Product Overview
 
-> **Versión del producto:** 0.13.0  
-> **Última actualización:** 16/09/2026  
-> **Estado:** Pre-lanzamiento — archivo de oferta, unidad/precio por sucursal, reportes de inventario  
+> **Versión del producto:** 0.14.0  
+> **Última actualización:** 18/09/2026  
+> **Estado:** Pre-lanzamiento — mejoras panel PROVIDER (Perfil, merma aditiva, series, PDF from/to)  
 > **Licencia:** [MIT](./LICENSE)
 
 ---
@@ -289,7 +289,17 @@ Cada proveedor tiene entradas `ProviderProduct` con variación de precio (~±10%
 - [x] Admin GLOBAL+LOCAL paginado; RBAC; 409 oferta oculta en entradas
 - [x] BUG-020: import de `inventoryEntrySchema` (500 → 200/409)
 
-### Fase 14+ — Canales y monetización
+### Fase 14 — Mejoras panel PROVIDER (v0.14.0)
+
+- [x] Perfil: identidad, datos de negocio, horarios, capacidades, pin AMM; `isVerified` no se apaga al mudar coords
+- [x] Catálogo/POS: identidad fuera del catálogo; `posShowImages`; precio vendible > 0
+- [x] Merma y ajuste aditivos en `InventoryEntry.kind` (sin kardex de venta POS / entrega)
+- [x] Reportes: series unificadas SVG, productos, bySource; PDF `from`/`to` (N=1 403)
+- [x] SubNav: Perfil siempre último
+
+### Posterior — Canales y monetización (Won't actual / no es F14)
+
+Este bloque **no** es la Fase 14 de producto. Queda fuera del Must actual (Won't):
 
 - [ ] PWA / app móvil
 - [ ] Pagos en línea (pasarela)
@@ -336,7 +346,7 @@ LaBorregaMarket es un proyecto público con licencia MIT.
 | Reportar vulnerabilidades | `SECURITY.md` |
 | Esquema como contrato | `prisma/schema.prisma` |
 | Seed reproducible (solo local) | `prisma/seed.ts` |
-| Versionado | `0.13.0`; pagos y PWA en el roadmap |
+| Versionado | `0.14.0`; pagos y PWA siguen como Won't posterior (no F14) |
 
 ---
 
