@@ -2,19 +2,31 @@ import PDFDocument from "pdfkit";
 import type { ProviderReport } from "@/lib/api/types";
 import { DASHBOARD_TZ } from "@/lib/timezone";
 
-export function reportPdfFilename(
-  businessName: string,
-  grain: string,
-  date: string
-): string {
-  const slug =
+function slugifyBusinessName(businessName: string): string {
+  return (
     businessName
       .normalize("NFD")
       .replace(/\p{M}/gu, "")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "negocio";
-  return `reporte-${slug}-${grain}-${date}.pdf`;
+      .replace(/^-+|-+$/g, "") || "negocio"
+  );
+}
+
+export function reportPdfFilename(
+  businessName: string,
+  grain: string,
+  date: string
+): string {
+  return `reporte-${slugifyBusinessName(businessName)}-${grain}-${date}.pdf`;
+}
+
+export function reportPdfRangeFilename(
+  businessName: string,
+  from: string,
+  to: string
+): string {
+  return `reporte-${slugifyBusinessName(businessName)}-${from}_${to}.pdf`;
 }
 
 function formatGeneratedAt(iso: string): string {
@@ -71,11 +83,11 @@ export function renderProviderReportPdf(report: ProviderReport): Promise<Buffer>
     doc.moveDown();
     doc.fontSize(12).text("Top productos");
     doc.fontSize(9);
-    const topProducts = report.topProducts ?? [];
-    if (topProducts.length === 0) {
+    const productRows = report.products ?? report.topProducts ?? [];
+    if (productRows.length === 0) {
       doc.text("Sin productos en el periodo.");
     } else {
-      for (const product of topProducts) {
+      for (const product of productRows) {
         doc.text(
           `${product.name}  ${product.salesTotal}  cant. ${product.quantitySum}`
         );

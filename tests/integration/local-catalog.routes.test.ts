@@ -136,5 +136,10 @@ describe("provider local-products + sections (F10)", () => {
       params: Promise.resolve({ id: "s1" }),
     });
     expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe("La sección tiene productos. Muévelos antes de eliminarla");
+    expect(body.details).toEqual([
+      { field: "id", message: "Reasigna los productos a otra sección" },
+    ]);
   });
 });

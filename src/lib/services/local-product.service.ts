@@ -8,6 +8,7 @@ import { findOwnedProvider } from "@/lib/providers/owned-provider";
 import { toDecimal } from "@/lib/money";
 import {
   assertCajaFactor,
+  assertPublishablePrice,
   assertUnitFactorChangeAllowed,
   insertPriceHistory,
 } from "@/lib/catalog/offer";
@@ -113,6 +114,7 @@ export async function createLocalProduct(params: {
       ? null
       : toDecimal(params.input.boxContentFactor);
   assertCajaFactor(params.input.unit, factor);
+  assertPublishablePrice(params.input.price, params.input.isAvailable ?? true);
 
   const created = await prisma.$transaction(async (tx) => {
     const product = await tx.product.create({
@@ -240,6 +242,11 @@ export async function updateLocalProduct(params: {
     unitOrFactorChanged,
     confirmDiscard: params.input.confirmDiscard,
   });
+
+  const nextAvailable = params.input.isAvailable ?? row.isAvailable;
+  const nextPrice =
+    params.input.price !== undefined ? toDecimal(params.input.price) : row.price;
+  assertPublishablePrice(nextPrice, nextAvailable);
 
   const updated = await prisma.$transaction(async (tx) => {
     await tx.product.update({

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProviderReport } from "@/lib/api/types";
-import { renderProviderReportPdf, reportPdfFilename } from "@/lib/reports/pdf";
+import { renderProviderReportPdf, reportPdfFilename, reportPdfRangeFilename } from "@/lib/reports/pdf";
 
 const emptyReport: ProviderReport = {
   empty: true,
@@ -30,6 +30,12 @@ describe("renderProviderReportPdf", () => {
   it("builds a kebab filename from the business name", () => {
     expect(reportPdfFilename("Frutas El Paraíso", "month", "2026-08")).toBe(
       "reporte-frutas-el-paraiso-month-2026-08.pdf"
+    );
+  });
+
+  it("builds a range filename from/to", () => {
+    expect(reportPdfRangeFilename("Frutas El Paraíso", "2026-09-01", "2026-09-12")).toBe(
+      "reporte-frutas-el-paraiso-2026-09-01_2026-09-12.pdf"
     );
   });
 

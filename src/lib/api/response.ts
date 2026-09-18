@@ -7,6 +7,7 @@ import {
   EncargarActiveError,
   ConfirmDiscardRequiredError,
   OfferArchivedError,
+  InvalidOfferPriceError,
 } from "@/lib/catalog/offer";
 
 export interface FieldError {
@@ -40,11 +41,17 @@ export function apiError(
   );
 }
 
-export function apiCodedError(code: string, message: string, status: number) {
+export function apiCodedError(
+  code: string,
+  message: string,
+  status: number,
+  details?: FieldError[]
+) {
   return NextResponse.json(
     {
       error: { code, message },
       timestamp: new Date().toISOString(),
+      ...(details && details.length > 0 ? { details } : {}),
     },
     { status }
   );
@@ -79,6 +86,9 @@ export function handleRouteError(err: unknown) {
   }
   if (err instanceof OfferArchivedError) {
     return apiError(err.message, 409, err.details());
+  }
+  if (err instanceof InvalidOfferPriceError) {
+    return apiError(err.message, 400, err.details());
   }
   return apiError("Error interno", 500);
 }

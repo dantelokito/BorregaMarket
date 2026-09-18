@@ -14,6 +14,7 @@ import { toDecimal } from "@/lib/money";
 import { formatOfferPrice } from "@/lib/catalog/sellable";
 import {
   assertCajaFactor,
+  assertPublishablePrice,
   assertUnitFactorChangeAllowed,
   insertPriceHistory,
   offerPanelFields,
@@ -188,6 +189,8 @@ export async function upsertProviderProduct(
 
   let result;
   if (existing) {
+    const nextPrice = input.price !== undefined ? input.price : existing.price;
+    assertPublishablePrice(nextPrice, input.isAvailable);
     result = await prisma.providerProduct.update({
       where: { id: existing.id },
       data: {
@@ -198,6 +201,7 @@ export async function upsertProviderProduct(
       include: { product: true },
     });
   } else if (input.price !== undefined) {
+    assertPublishablePrice(input.price, input.isAvailable);
     result = await prisma.providerProduct.create({
       data: {
         providerId: provider.id,
@@ -394,6 +398,14 @@ export async function patchOfferByProduct(params: {
   if (!existing && params.input.price === undefined) {
     throw new ProductActivationError("Debes especificar un precio para activar un producto nuevo");
   }
+
+  const nextAvailable =
+    params.input.isAvailable !== undefined
+      ? params.input.isAvailable
+      : existing?.isAvailable ?? true;
+  const nextPrice =
+    params.input.price !== undefined ? toDecimal(params.input.price) : existing?.price;
+  assertPublishablePrice(nextPrice, nextAvailable);
 
   const nextSaleUnit =
     params.input.saleUnit !== undefined ? params.input.saleUnit : existing?.saleUnit ?? null;

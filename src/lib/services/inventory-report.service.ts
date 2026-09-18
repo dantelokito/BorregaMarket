@@ -47,6 +47,7 @@ export async function getBranchInventoryReport(params: {
 
   const entryWhere: Prisma.InventoryEntryWhereInput = {
     providerProductId: { in: offers.map((row) => row.id) },
+    kind: "ENTRADA",
   };
   if (params.from && params.to) {
     entryWhere.createdAt = {
