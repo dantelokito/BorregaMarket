@@ -9,11 +9,11 @@ describe("checkAuthRateLimit memory store", () => {
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
     process.env.AUTH_RATE_LIMIT_LOGIN_PER_IP = "2";
     process.env.AUTH_RATE_LIMIT_REGISTER_PER_IP = "1";
-    process.env.NODE_ENV = originalNodeEnv;
+    (process.env as Record<string, string | undefined>).NODE_ENV = originalNodeEnv;
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv;
+    (process.env as Record<string, string | undefined>).NODE_ENV = originalNodeEnv;
   });
 
   it("allows then blocks after the login window fills", async () => {
@@ -25,7 +25,7 @@ describe("checkAuthRateLimit memory store", () => {
   });
 
   it("throws AuthRedisUnavailableError in production without Upstash keys", async () => {
-    process.env.NODE_ENV = "production";
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
     const { checkAuthRateLimit, AuthRedisUnavailableError } = await import(
       "@/lib/rate-limit/auth"
     );

@@ -9,11 +9,11 @@ describe("checkContactRateLimit memory store", () => {
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
     process.env.CONTACT_RATE_LIMIT_PER_PROVIDER = "2";
     process.env.CONTACT_RATE_LIMIT_PER_IP = "20";
-    process.env.NODE_ENV = originalNodeEnv;
+    (process.env as Record<string, string | undefined>).NODE_ENV = originalNodeEnv;
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv;
+    (process.env as Record<string, string | undefined>).NODE_ENV = originalNodeEnv;
   });
 
   it("resolves the Upstash Redis SDK", async () => {
@@ -30,7 +30,7 @@ describe("checkContactRateLimit memory store", () => {
   });
 
   it("throws ContactRedisUnavailableError in production without Upstash keys", async () => {
-    process.env.NODE_ENV = "production";
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
     const { checkContactRateLimit, ContactRedisUnavailableError } = await import(
       "@/lib/rate-limit/contact"
     );

@@ -66,9 +66,9 @@ describe("uploadProviderMedia size limit", () => {
 
     const { writeImageBuffer } = await import("@/lib/storage/local-disk");
     vi.mocked(writeImageBuffer).mockResolvedValue({
+      filename: "ok.jpg",
       url: "/api/media/ok.jpg",
       bytes: MAX_IMAGE_BYTES,
-      mime: "image/jpeg",
     });
     prismaMock.provider.update.mockResolvedValue({});
 
