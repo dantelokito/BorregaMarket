@@ -1,0 +1,47 @@
+---
+description: Arranque local estable de LaBorregaMarket en puerto 8080 (Windows)
+alwaysApply: false
+---
+
+# Bootstrap local — LaBorregaMarket
+
+Usa este flujo cuando el usuario pida levantar, reiniciar o preparar el ambiente local.
+
+## Contexto del repo
+
+- Versión 0.12.0 (rama feat/f12-inventario-blando)
+- Next.js 15 + Prisma 6 + PostgreSQL
+- Puerto fijo: 8080 (`npm run dev:lan` para acceso LAN)
+- Windows / PowerShell
+- `.env` ya existe en la raíz (no sobrescribir)
+- Media local: `UPLOADS_DIR` (default `./uploads`); Cloudinary no es obligatorio
+- Aplicar TODAS las migraciones pendientes con `npx prisma migrate deploy` (incluye F12 inventario blando)
+
+## Objetivo
+
+Dejar la app corriendo sin errores en http://localhost:8080, con schema de BD alineado y Prisma client regenerado.
+
+## Pasos obligatorios (en este orden)
+
+1. Verifica si hay procesos en el puerto 8080 y detén solo los de Next.js/Node si están ocupándolo.
+2. Ejecuta `npm install` (respeta `.npmrc` con `legacy-peer-deps=true`).
+   - Si npm bloquea install scripts, ejecuta `npm approve-scripts --allow-scripts-pending` y repite install.
+3. Antes de Prisma, asegúrate de que no haya `next dev` corriendo (en Windows el DLL de Prisma se bloquea).
+4. Ejecuta `npx prisma generate` (aunque postinstall lo intente, forzar tras liberar el puerto).
+5. Ejecuta `npx prisma migrate deploy` (no `db push` salvo que falle migrate).
+6. Si la BD está vacía o faltan datos demo, ejecuta `npm run db:seed`.
+7. Levanta `npm run dev:lan` en background.
+8. Verifica salud:
+   - GET http://localhost:8080 → 200
+   - GET http://localhost:8080/api/auth/session → 200
+   - Revisa logs por errores de Prisma, migraciones o puerto en uso.
+
+Alternativa automatizada: `powershell -ExecutionPolicy Bypass -File scripts/bootstrap-local.ps1`
+
+## Reglas
+
+- No modificar `.env` ni hacer commits.
+- No hacer `git push`.
+- Si algo falla, diagnosticar y corregir antes de seguir (no omitir pasos).
+- Si `migrate deploy` falla por drift, reportar el error exacto y proponer fix mínimo.
+- Al final, indicar URLs activas, estado de migraciones y warnings relevantes.
