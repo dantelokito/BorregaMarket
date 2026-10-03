@@ -293,7 +293,7 @@ export function PosPageClient() {
   }
 
   return (
-    <div className="mx-auto flex max-w-[1600px] flex-col lg:h-[calc(100vh-9rem)] lg:flex-row">
+    <div className="relative z-40 mx-auto flex max-w-[1600px] flex-col lg:h-[calc(100vh-9rem-var(--cookie-notice-offset,0px))] lg:flex-row">
       <section className="flex-1 overflow-y-auto p-4 lg:w-[58%] lg:border-r">
         <ActiveStoreEyebrow />
         <PosImagesToggle

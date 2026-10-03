@@ -380,7 +380,7 @@ export function CartPageClient() {
 
       <div
         ref={stickyRef}
-        className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white px-4 py-3 lg:hidden"
+        className="fixed bottom-[var(--cookie-notice-offset,0px)] left-0 right-0 z-40 border-t border-gray-200 bg-white px-4 py-3 lg:hidden"
       >
         <CartSummary
           itemCount={itemCount}

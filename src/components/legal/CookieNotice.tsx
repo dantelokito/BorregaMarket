@@ -17,12 +17,15 @@ export function CookieNotice() {
     const root = document.documentElement;
     if (!open) {
       root.style.removeProperty("--cookie-notice-h");
+      root.style.removeProperty("--cookie-notice-offset");
       return;
     }
     const el = noticeRef.current;
     if (!el) return;
     const publish = () => {
-      root.style.setProperty("--cookie-notice-h", `${Math.ceil(el.getBoundingClientRect().height)}px`);
+      const height = Math.ceil(el.getBoundingClientRect().height);
+      root.style.setProperty("--cookie-notice-h", `${height}px`);
+      root.style.setProperty("--cookie-notice-offset", `${height + 12}px`);
     };
     publish();
     const observer = new ResizeObserver(publish);
@@ -30,6 +33,7 @@ export function CookieNotice() {
     return () => {
       observer.disconnect();
       root.style.removeProperty("--cookie-notice-h");
+      root.style.removeProperty("--cookie-notice-offset");
     };
   }, [open]);
 
@@ -58,7 +62,7 @@ export function CookieNotice() {
       data-cookie-notice
       role="region"
       aria-label="Aviso de cookies y medición"
-      className={`no-print fixed z-50 rounded-xl border border-gray-200 bg-white p-4 shadow-lg inset-x-3 bottom-[calc(var(--sticky-cta-h,0px)+0.75rem)] sm:inset-x-auto sm:right-4 sm:max-w-md ${
+      className={`no-print fixed z-30 rounded-xl border border-gray-200 bg-white p-4 shadow-lg inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:max-w-md ${
         leaving ? "opacity-0 transition-opacity duration-150 motion-reduce:transition-none" : ""
       }`}
     >

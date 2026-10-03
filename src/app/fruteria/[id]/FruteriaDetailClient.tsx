@@ -252,7 +252,7 @@ export function FruteriaDetailClient() {
 
       <div
         ref={stickyRef}
-        className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white p-4 lg:hidden"
+        className="fixed bottom-[var(--cookie-notice-offset,0px)] left-0 right-0 z-40 border-t border-gray-200 bg-white p-4 lg:hidden"
       >
         {hasItems && (
           <div className="mb-2 flex items-center justify-between gap-3">
