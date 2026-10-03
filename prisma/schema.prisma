@@ -108,6 +108,24 @@ enum SystemModule {
   PERMISSIONS
   AUTH
   AUDIT
+  LEGAL
+}
+
+enum LegalPersonType {
+  FISICA
+  MORAL
+}
+
+enum LegalDocumentType {
+  PRIVACY
+  TERMS
+  COOKIES
+}
+
+enum ConsentSource {
+  REGISTER
+  PROVIDER_ONBOARDING
+  RELOGIN
 }
 
 // ─── USUARIOS ────────────────────────────────────────────────────────────────
@@ -130,6 +148,9 @@ model User {
   addresses              UserAddress[]
   auditLogs              AuditLog[]
   priceHistoryChanges    ProviderProductPriceHistory[]
+  consents               UserConsent[]
+  legalSettingsUpdates   LegalSettings[]  @relation("LegalSettingsUpdatedBy")
+  legalDocumentsCreated  LegalDocument[]  @relation("LegalDocumentCreatedBy")
 
   @@map("users")
 }
@@ -180,6 +201,8 @@ model Provider {
   offersDelivery         Boolean  @default(false) @map("offers_delivery")
   openingHours           Json?    @map("opening_hours")
   whatsappEnabled        Boolean  @default(false) @map("whatsapp_enabled")
+  whatsappOrderOptIn     Boolean  @default(false) @map("whatsapp_order_opt_in")
+  whatsappOrderOptInAt   DateTime? @map("whatsapp_order_opt_in_at")
   acceptsCardAtStore     Boolean  @default(false) @map("accepts_card_at_store")
   offersWholesale        Boolean  @default(false) @map("offers_wholesale")
   offersRetail           Boolean  @default(true) @map("offers_retail")
@@ -440,4 +463,60 @@ model AuditLog {
   @@index([module, createdAt])
   @@index([userId])
   @@map("audit_logs")
+}
+
+// ─── LEGAL (F15, ADR-042) ────────────────────────────────────────────────────
+
+/// Fila única id = 1 (CHECK en SQL). Campos nullable: la completitud se calcula.
+model LegalSettings {
+  id          Int              @id @default(1)
+  personType  LegalPersonType? @map("person_type")
+  legalName   String?          @map("legal_name")
+  rfc         String?
+  address     String?
+  arcoEmail   String?          @map("arco_email")
+  phone       String?
+  effectiveAt DateTime?        @map("effective_at") @db.Date
+  updatedById String?          @map("updated_by_id")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  updatedBy User? @relation("LegalSettingsUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("legal_settings")
+}
+
+/// Inmutable: nunca UPDATE ni DELETE; se publica otra versión.
+model LegalDocument {
+  id          String            @id @default(cuid())
+  type        LegalDocumentType
+  version     Int
+  title       String
+  content     String            @db.Text
+  effectiveAt DateTime          @map("effective_at")
+  publishedAt DateTime          @default(now()) @map("published_at")
+  createdById String?           @map("created_by_id")
+
+  createdBy User?         @relation("LegalDocumentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  consents  UserConsent[]
+
+  @@unique([type, version])
+  @@index([type, effectiveAt])
+  @@map("legal_documents")
+}
+
+model UserConsent {
+  id           String            @id @default(cuid())
+  userId       String            @map("user_id")
+  documentId   String            @map("document_id")
+  documentType LegalDocumentType @map("document_type")
+  version      Int
+  source       ConsentSource
+  acceptedAt   DateTime          @default(now()) @map("accepted_at")
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document LegalDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, documentId, source])
+  @@index([userId, documentType])
+  @@map("user_consents")
 }

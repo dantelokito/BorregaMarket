@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient, UserRole, ProductCategory, ProductUnit, SystemModule, AuditAction } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { isDemoSeedAllowed } from "../src/lib/seed/demo-guard";
+import { seedLegal } from "./seed-legal";
 
 const prisma = new PrismaClient();
 
@@ -24,6 +25,7 @@ async function main() {
       { code: SystemModule.PERMISSIONS, name: "Permisos", description: "Control de acceso por rol" },
       { code: SystemModule.AUTH, name: "Autenticación", description: "Login y sesiones" },
       { code: SystemModule.AUDIT, name: "Bitácora", description: "Registro de auditoría" },
+      { code: SystemModule.LEGAL, name: "Legal", description: "Datos del responsable y documentos legales" },
     ].map((m) =>
       prisma.module.upsert({
         where: { code: m.code },
@@ -288,6 +290,9 @@ async function main() {
       });
     }
   }
+
+  // ─── Documentos legales v1 (F15) ──────────────────────────────────────────
+  await seedLegal(prisma);
 
   // ─── Bitácora inicial ────────────────────────────────────────────────────────
   await prisma.auditLog.create({
