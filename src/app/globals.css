@@ -269,12 +269,17 @@ body {
   #report-print,
   #report-print *,
   #report-print-f10,
-  #report-print-f10 * {
+  #report-print-f10 *,
+  #legal-print,
+  #legal-print *,
+  #legal-document,
+  #legal-document * {
     visibility: visible;
   }
   #pos-ticket,
   #report-print,
-  #report-print-f10 {
+  #report-print-f10,
+  #legal-print {
     position: absolute;
     left: 0;
     top: 0;

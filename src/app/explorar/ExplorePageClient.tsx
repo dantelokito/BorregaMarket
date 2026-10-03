@@ -36,6 +36,8 @@ import {
 } from "@/lib/maps/constants";
 import { exploreChipFallbackLabel, resolveExploreCenter } from "@/lib/maps/explore-center";
 import { useFilterBarCollapse } from "@/hooks/useFilterBarCollapse";
+import { useGeoPermission } from "@/hooks/useGeoPermission";
+import { PrivacyMicrocopy } from "@/components/legal/PrivacyMicrocopy";
 
 const EXPLORE_PAGE_SIZE = 20;
 
@@ -157,6 +159,7 @@ function ExploreContent() {
   const [error, setError] = useState("");
   const [locating, setLocating] = useState(false);
   const [geoDenied, setGeoDenied] = useState(false);
+  const geoPermission = useGeoPermission();
   const [outOfMexico, setOutOfMexico] = useState(false);
   const [pinLabel, setPinLabel] = useState<string | undefined>();
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
@@ -603,12 +606,13 @@ function ExploreContent() {
 
             {/* Errores / hints debajo de la barra (no inflan la fila) */}
             <div className="mx-auto max-w-[1760px] space-y-2 px-4 pb-2 sm:px-6">
-              {geoDenied && (
-                <p className="text-sm text-slate-600">
-                  No pudimos usar tu ubicación. Puedes buscar una dirección o usar una favorita.
-                  Seguimos en San Nicolás.
+              {geoDenied || geoPermission === "denied" ? (
+                <p className="text-sm text-slate-700" role="status">
+                  Sin acceso a tu ubicación. Busca por texto o mueve el mapa.
                 </p>
-              )}
+              ) : geoPermission !== "granted" ? (
+                <PrivacyMicrocopy variant="geo" />
+              ) : null}
               <OutOfMexicoBanner visible={outOfMexico} />
               {qTooShort && (
                 <p className="text-sm text-slate-600" role="status">

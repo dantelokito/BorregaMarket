@@ -22,6 +22,7 @@ import { QuickSaleModal, type QuickSaleDraft } from "./QuickSaleModal";
 import { ScaleStatusBadge } from "./ScaleStatusBadge";
 import { usePosScale } from "./usePosScale";
 import { formatCurrency, formatQty, lineAmount, parseDecimalInput, qtyToApiString } from "@/lib/format";
+import { useStickyCtaHeight } from "@/hooks/useStickyCtaHeight";
 import { PAYMENT_METHOD_LABEL, UNIT_LABEL, shortOrderId, toUnitOfMeasure } from "@/lib/orders/labels";
 import { gramsToQuantity, isWeighableUnit } from "@/lib/pos/scale";
 import { ActiveStoreEyebrow } from "@/components/provider/ActiveStoreEyebrow";
@@ -37,6 +38,8 @@ interface TicketLine {
 }
 
 export function PosPageClient() {
+  const stickyRef = useRef<HTMLDivElement>(null);
+  useStickyCtaHeight(stickyRef);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [businessName, setBusinessName] = useState("");
   const [posShowImages, setPosShowImages] = useState(true);
@@ -467,7 +470,10 @@ export function PosPageClient() {
           )}
         </div>
 
-        <div className="sticky bottom-0 space-y-3 border-t border-gray-200 bg-white p-4 lg:static">
+        <div
+          ref={stickyRef}
+          className="sticky bottom-0 space-y-3 border-t border-gray-200 bg-white p-4 lg:static"
+        >
           {chargeError && <ErrorBanner message={chargeError} onRetry={() => void charge()} />}
           <p className="flex justify-between text-lg font-bold" aria-live="polite">
             Total <span className="tabular-nums">{formatCurrency(total)}</span>

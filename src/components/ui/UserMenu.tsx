@@ -2,9 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Menu, User, LogOut, Settings, Store, Shield, Search, ShoppingCart } from "lucide-react";
 import { logout } from "@/lib/api/auth";
+import { clearClientCaches } from "@/lib/session/clear-client-caches";
 import type { AuthUser } from "@/lib/api/types";
 
 interface UserMenuProps {
@@ -18,7 +18,6 @@ const ROLE_LABELS: Record<AuthUser["role"], string> = {
 };
 
 export function UserMenu({ user }: UserMenuProps) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -44,8 +43,8 @@ export function UserMenu({ user }: UserMenuProps) {
     setLoggingOut(true);
     try {
       await logout();
-      router.push("/");
-      router.refresh();
+      await clearClientCaches();
+      window.location.assign("/");
     } catch {
       setLoggingOut(false);
     }

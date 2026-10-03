@@ -40,6 +40,7 @@ export interface AuthSession {
   providerCount?: number;
   activeProviderId?: string | null;
   providers?: SessionProviderSummary[];
+  pendingConsents?: { type: "TERMS" | "PRIVACY"; version: number; title: string }[];
 }
 
 export interface MineProvider {
@@ -218,6 +219,7 @@ export interface ProviderBusiness {
   preparationTimeMinutes?: number;
   offersDelivery?: boolean;
   whatsappEnabled?: boolean;
+  whatsappOrderOptIn?: boolean;
   acceptsCardAtStore?: boolean;
   offersWholesale?: boolean;
   offersRetail?: boolean;
@@ -586,4 +588,7 @@ export interface CreateProviderInput {
   longitude: number;
   phone?: string;
   description?: string;
+  acceptTerms: true;
+  termsVersion: number;
+  whatsappOrderOptIn?: boolean;
 }

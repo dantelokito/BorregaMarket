@@ -1,18 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createProvider } from "@/lib/api/providers";
+import { getLegalCurrent } from "@/lib/api/legal";
 import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { MiniMap } from "@/components/fruteria/MiniMap";
 import { useToast } from "@/components/ui/Toast";
 import { useProviderScope } from "@/hooks/useProviderScope";
 import { notifyActiveProviderChanged } from "@/lib/api/provider-f11";
 import { refreshSessionTheme } from "@/lib/api/auth";
+import { digitsOnly } from "@/lib/phone";
+import { ConsentCheckbox } from "@/components/legal/ConsentCheckbox";
+import { LegalExternalLink } from "@/components/legal/LegalExternalLink";
+
+const CONSENT_RETRY =
+  "No pudimos registrar tu aceptación. Recarga la página e intenta de nuevo.";
 
 export function BusinessOnboardingClient() {
   const router = useRouter();
@@ -29,12 +37,49 @@ export function BusinessOnboardingClient() {
     description: "",
   });
   const [error, setError] = useState("");
+  const [consentError, setConsentError] = useState("");
+  const [accepted, setAccepted] = useState(false);
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [termsVersion, setTermsVersion] = useState<number | null>(null);
+  const consentRef = useRef<HTMLInputElement>(null);
+  const phoneOk = digitsOnly(form.phone).length === 10;
+
+  useEffect(() => {
+    let active = true;
+    getLegalCurrent()
+      .then(({ data }) => {
+        if (!active) return;
+        setTermsVersion(data.documents.find((doc) => doc.type === "TERMS")?.version ?? null);
+      })
+      .catch(() => {
+        if (active) setTermsVersion(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function onPhoneChange(phone: string) {
+    const nextOk = digitsOnly(phone).length === 10;
+    setForm({ ...form, phone });
+    if (!nextOk) setWhatsappOptIn(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setError("");
+    if (!accepted) {
+      setConsentError("Debes aceptar los Términos para continuar");
+      consentRef.current?.focus();
+      return;
+    }
+    setConsentError("");
+    if (!termsVersion) {
+      setError(CONSENT_RETRY);
+      return;
+    }
+    setLoading(true);
 
     try {
       await createProvider({
@@ -45,6 +90,9 @@ export function BusinessOnboardingClient() {
         longitude: form.longitude,
         phone: form.phone || undefined,
         description: form.description || undefined,
+        acceptTerms: true,
+        termsVersion,
+        whatsappOrderOptIn: phoneOk && whatsappOptIn,
       });
       showToast("Frutería creada", "success");
       refreshSessionTheme();
@@ -52,7 +100,12 @@ export function BusinessOnboardingClient() {
       router.push("/proveedor");
       router.refresh();
     } catch (err) {
-      if (err instanceof ApiError) {
+      if (err instanceof ApiError && err.status === 400) {
+        const consentField = err.details?.some((detail) =>
+          ["acceptTerms", "termsVersion"].includes(detail.field)
+        );
+        setError(consentField ? CONSENT_RETRY : err.message);
+      } else if (err instanceof ApiError) {
         setError(err.message);
       } else {
         setError("Error de conexión");
@@ -126,7 +179,7 @@ export function BusinessOnboardingClient() {
           type="tel"
           name="phone"
           value={form.phone}
-          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          onChange={(e) => onPhoneChange(e.target.value)}
         />
         <div>
           <label htmlFor="description" className="mb-1 block text-sm font-medium">
@@ -156,15 +209,47 @@ export function BusinessOnboardingClient() {
           />
         </div>
 
-        {error && (
-          <p
-            className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600"
-            role="alert"
-            aria-live="polite"
-          >
-            {error}
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-slate-900">Avisos de pedidos</legend>
+          <div className="flex min-h-11 items-start gap-3">
+            <input
+              id="whatsapp-optin"
+              type="checkbox"
+              className="mt-0.5 h-5 w-5 accent-slate-900"
+              checked={whatsappOptIn}
+              disabled={!phoneOk || loading}
+              aria-describedby="whatsapp-optin-hint"
+              onChange={(e) => setWhatsappOptIn(e.target.checked)}
+            />
+            <label htmlFor="whatsapp-optin" className="text-sm text-slate-700">
+              Recibir avisos de pedidos por WhatsApp al teléfono del negocio
+            </label>
+          </div>
+          <p id="whatsapp-optin-hint" className="text-xs text-slate-600">
+            {phoneOk
+              ? "Opcional. Siempre recibirás los avisos por correo."
+              : "Agrega un teléfono de 10 dígitos para activarlo."}
           </p>
-        )}
+        </fieldset>
+
+        <ConsentCheckbox
+          ref={consentRef}
+          id="consent-provider-terms"
+          checked={accepted}
+          disabled={loading}
+          error={consentError}
+          onChange={(checked) => {
+            setAccepted(checked);
+            if (checked) setConsentError("");
+          }}
+        >
+          Acepto los <LegalExternalLink href="/legal/terminos">Términos y Condiciones</LegalExternalLink>{" "}
+          para fruterías: mi negocio es responsable del precio, calidad, peso e higiene de los productos
+          que publica, y he leído el{" "}
+          <LegalExternalLink href="/legal/privacidad">Aviso de Privacidad</LegalExternalLink>.
+        </ConsentCheckbox>
+
+        {error ? <ErrorBanner message={error} /> : null}
 
         <Button type="submit" loading={loading} loadingText="Creando…" className="w-full min-h-11 py-3">
           {isNewBranch ? "Crear frutería" : "Guardar y continuar"}

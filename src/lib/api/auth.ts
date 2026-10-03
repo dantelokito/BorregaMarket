@@ -29,6 +29,9 @@ export async function register(input: {
   password: string;
   phone?: string;
   role?: "CLIENT" | "PROVIDER";
+  acceptLegal: true;
+  termsVersion: number;
+  privacyVersion: number;
 }) {
   const { data } = await apiPost<{ user: AuthUser }>("/api/auth/register", input);
   refreshSessionTheme();

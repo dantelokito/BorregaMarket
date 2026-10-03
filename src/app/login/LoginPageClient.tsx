@@ -2,9 +2,10 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { getAuthSession, login } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
+import { track } from "@/lib/analytics/track";
 import { isValidRedirect } from "@/lib/auth/redirect";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -13,7 +14,6 @@ import { DemoAccountsBlock } from "@/components/auth/DemoAccountsBlock";
 import { useProviderScope } from "@/hooks/useProviderScope";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectParam = searchParams.get("redirect") ?? searchParams.get("next");
 
@@ -53,8 +53,8 @@ function LoginForm() {
         destination = redirectParam;
       }
 
-      router.push(destination);
-      router.refresh();
+      track("login_success", { source: user.role });
+      window.location.assign(destination);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);

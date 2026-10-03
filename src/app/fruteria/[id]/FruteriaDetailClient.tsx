@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ShoppingCart } from "lucide-react";
@@ -26,8 +26,12 @@ import {
   type SessionCart,
 } from "@/lib/cart/session-cart";
 import { formatCurrency } from "@/lib/format";
+import { track } from "@/lib/analytics/track";
+import { useStickyCtaHeight } from "@/hooks/useStickyCtaHeight";
 
 export function FruteriaDetailClient() {
+  const stickyRef = useRef<HTMLDivElement>(null);
+  useStickyCtaHeight(stickyRef);
   const params = useParams();
   const id = params.id as string;
 
@@ -102,12 +106,22 @@ export function FruteriaDetailClient() {
       imageUrl: product.imageUrl,
     };
 
+    const previous =
+      base.items.find((item) => item.providerProductId === product.providerProductId)?.quantity ?? 0;
     const next =
       quantity <= 0
         ? setItemQuantity(base, product.providerProductId, 0)
         : upsertItem(base, nextItem);
+    if (quantity > previous) {
+      track("cart_add", { providerId: provider.id, source: "detail" });
+    }
     save(next.items.length === 0 ? null : next);
   }
+
+  useEffect(() => {
+    if (!provider?.id) return;
+    track("provider_view", { providerId: provider.id });
+  }, [provider?.id]);
 
   function handleQuantityChange(product: ProviderProduct, quantity: number) {
     if (cart && cart.providerId !== id && cart.items.length > 0) {
@@ -236,7 +250,10 @@ export function FruteriaDetailClient() {
         </Link>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white p-4 lg:hidden">
+      <div
+        ref={stickyRef}
+        className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white p-4 lg:hidden"
+      >
         {hasItems && (
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-sm font-medium" aria-live="polite">
@@ -254,6 +271,7 @@ export function FruteriaDetailClient() {
           providerId={provider.id}
           phone={provider.phone}
           emphasis={hasItems ? "secondary" : "primary"}
+          notice="above"
         />
       </div>
 

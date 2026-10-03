@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import type { UserAddress } from "@/lib/api/types";
 import { FavoriteAddressRow } from "./FavoriteAddressRow";
+import { PrivacyMicrocopy } from "@/components/legal/PrivacyMicrocopy";
 
 interface LocationPanelProps {
   variant: "sheet" | "popover";
@@ -159,6 +160,9 @@ export function LocationPanel({
         >
           {guest ? "Guardar esta ubicación" : "+ Guardar esta ubicación"}
         </button>
+        <div className="mt-3">
+          <PrivacyMicrocopy variant="geo" />
+        </div>
       </div>
     </div>
   );

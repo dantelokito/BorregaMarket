@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { PrivacyMicrocopy } from "@/components/legal/PrivacyMicrocopy";
 
 interface SaveAddressDialogProps {
   open: boolean;
@@ -102,6 +103,9 @@ export function SaveAddressDialog({
                 {error}
               </p>
             )}
+            <div className="mt-2">
+              <PrivacyMicrocopy variant="address" />
+            </div>
           </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="secondary" className="min-h-11" onClick={onCancel}>

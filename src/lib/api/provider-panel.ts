@@ -14,6 +14,7 @@ export interface PatchProviderSettingsInput {
   preparationTimeMinutes?: number;
   offersDelivery?: boolean;
   whatsappEnabled?: boolean;
+  whatsappOrderOptIn?: boolean;
   acceptsCardAtStore?: boolean;
   offersWholesale?: boolean;
   offersRetail?: boolean;

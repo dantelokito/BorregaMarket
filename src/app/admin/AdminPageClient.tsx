@@ -20,8 +20,12 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { AdminProductForm } from "@/components/admin/AdminProductForm";
 import { ProviderTableF10 } from "@/components/admin/ProviderTableF10";
 import { mapF10ApiError } from "@/lib/ui/f10-errors";
+import { getAdminLegalSettings, getLegalCurrent, type AdminLegalSettings } from "@/lib/api/legal";
+import { LegalIncompleteAlert } from "@/components/admin/LegalIncompleteAlert";
+import { AdminLegalSettingsForm } from "@/components/admin/AdminLegalSettingsForm";
 
-type AdminTab = "catalogs" | "providers" | "audit";
+type AdminTab = "catalogs" | "providers" | "audit" | "legal";
+type LegalAccess = "loading" | "allowed" | "forbidden" | "error";
 
 const CATALOGS = [
   { id: "users", label: "Usuarios", icon: Users, color: "bg-blue-100 text-blue-700" },
@@ -42,6 +46,45 @@ export function AdminPageClient() {
   const [auditContactOnly, setAuditContactOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [legalAccess, setLegalAccess] = useState<LegalAccess>("loading");
+  const [legalSettings, setLegalSettings] = useState<AdminLegalSettings | null>(null);
+  const [legalComplete, setLegalComplete] = useState<boolean | null>(null);
+  const [legalTick, setLegalTick] = useState(0);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "legal") {
+      setTab("legal");
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getLegalCurrent()
+      .then(({ data }) => {
+        if (active) setLegalComplete(data.settings.isComplete);
+      })
+      .catch(() => {
+        if (active) setLegalComplete(null);
+      });
+    getAdminLegalSettings()
+      .then(({ data }) => {
+        if (!active) return;
+        setLegalSettings(data);
+        setLegalAccess("allowed");
+        setLegalComplete(data.isComplete);
+      })
+      .catch((err) => {
+        if (!active) return;
+        if (err instanceof ApiError && (err.status === 403 || err.status === 401)) {
+          setLegalAccess("forbidden");
+        } else {
+          setLegalAccess("error");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [legalTick]);
 
   useEffect(() => {
     if (tab !== "catalogs" || !activeCatalog || activeCatalog === "products") return;
@@ -99,17 +142,26 @@ export function AdminPageClient() {
         </Link>
       </div>
 
+      {legalComplete === false ? (
+        <LegalIncompleteAlert canEdit={legalAccess === "allowed"} />
+      ) : null}
+
       <div className="mb-6 flex gap-2 border-b border-gray-200">
         {(
           [
-            { id: "catalogs", label: "Catálogos" },
-            { id: "providers", label: "Proveedores" },
-            { id: "audit", label: "Bitácora" },
-          ] as const
+            { id: "catalogs" as const, label: "Catálogos" },
+            { id: "providers" as const, label: "Proveedores" },
+            { id: "audit" as const, label: "Bitácora" },
+            ...(legalAccess === "allowed" ? [{ id: "legal" as const, label: "Legal" }] : []),
+          ]
         ).map((t) => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => {
+              setTab(t.id);
+              const url = t.id === "legal" ? "/admin?tab=legal" : "/admin";
+              window.history.replaceState(null, "", url);
+            }}
             className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--brand)] ${
               tab === t.id
                 ? "border-[var(--brand)] text-[var(--brand)]"
@@ -275,6 +327,31 @@ export function AdminPageClient() {
           )}
         </div>
       )}
+
+      {tab === "legal" && legalAccess === "forbidden" ? (
+        <ErrorBanner message="No tienes permiso para ver los datos legales." />
+      ) : null}
+      {tab === "legal" && legalAccess === "error" ? (
+        <ErrorBanner
+          message="No pudimos cargar los datos legales."
+          onRetry={() => setLegalTick((n) => n + 1)}
+        />
+      ) : null}
+      {tab === "legal" && legalAccess === "loading" ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-6">
+          <SkeletonTable rows={4} />
+        </div>
+      ) : null}
+      {tab === "legal" && legalAccess === "allowed" && legalSettings ? (
+        <AdminLegalSettingsForm
+          key={legalSettings.updatedAt ?? "empty"}
+          initial={legalSettings}
+          onSaved={(next) => {
+            setLegalSettings(next);
+            setLegalComplete(next.isComplete);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

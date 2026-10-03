@@ -31,8 +31,11 @@ import { useToast } from "@/components/ui/Toast";
 import { formatCurrency, lineAmount, qtyToApiString } from "@/lib/format";
 import { UNIT_LABEL } from "@/lib/orders/labels";
 import { readExplorePin } from "@/lib/maps/constants";
+import { useStickyCtaHeight } from "@/hooks/useStickyCtaHeight";
 
 export function CartPageClient() {
+  const stickyRef = useRef<HTMLDivElement>(null);
+  useStickyCtaHeight(stickyRef);
   const { cart, hydrated, save } = useCart();
   const { showToast } = useToast();
   const [unavailable, setUnavailable] = useState<Set<string>>(new Set());
@@ -375,7 +378,10 @@ export function CartPageClient() {
         </aside>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white px-4 py-3 lg:hidden">
+      <div
+        ref={stickyRef}
+        className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white px-4 py-3 lg:hidden"
+      >
         <CartSummary
           itemCount={itemCount}
           total={total}

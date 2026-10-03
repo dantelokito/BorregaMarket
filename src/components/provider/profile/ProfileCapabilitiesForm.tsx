@@ -98,8 +98,8 @@ export function ProfileCapabilitiesForm({
       <form onSubmit={(e) => void save(e)} className="space-y-4">
         <SwitchRow
           id="cap-whatsapp"
-          label="WhatsApp"
-          hint="Los clientes pueden contactarte por WhatsApp."
+          label="Contacto por WhatsApp"
+          hint="Muestra el botón de WhatsApp en tu vitrina para que los clientes te escriban."
           checked={whatsapp}
           onChange={setWhatsapp}
         />

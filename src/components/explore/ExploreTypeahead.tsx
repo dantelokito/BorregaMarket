@@ -7,6 +7,7 @@ import { getProviders, type ProviderCategory } from "@/lib/api/providers";
 import { ApiError } from "@/lib/api/client";
 import type { ProviderListing } from "@/lib/api/types";
 import { ImagePlaceholder } from "@/components/ui/ImagePlaceholder";
+import { track } from "@/lib/analytics/track";
 
 const DEBOUNCE_MS = 300;
 
@@ -124,7 +125,14 @@ export function ExploreTypeahead({
   }, [query, fetchMatches]);
 
   function apply(q: string) {
-    onApplyQuery(q.trim());
+    const trimmed = q.trim();
+    if (trimmed.length >= 2) {
+      track("explore_search", {
+        ...(filters?.category ? { category: filters.category } : {}),
+        source: "typeahead",
+      });
+    }
+    onApplyQuery(trimmed);
     setOpen(false);
   }
 

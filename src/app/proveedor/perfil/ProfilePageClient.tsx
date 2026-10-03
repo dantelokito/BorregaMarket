@@ -7,6 +7,7 @@ import { ProfileGoogleBlock } from "@/components/provider/profile/ProfileGoogleB
 import { ProfileBusinessForm } from "@/components/provider/profile/ProfileBusinessForm";
 import { OpeningHoursEditor } from "@/components/provider/profile/OpeningHoursEditor";
 import { ProfileCapabilitiesForm } from "@/components/provider/profile/ProfileCapabilitiesForm";
+import { ProfileNotifyBlock } from "@/components/provider/profile/ProfileNotifyBlock";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
@@ -50,6 +51,7 @@ export function ProfilePageClient() {
           <ProfileBusinessForm business={business} onSave={patch} />
           <OpeningHoursEditor business={business} onSave={patch} />
           <ProfileCapabilitiesForm business={business} onSave={patch} />
+          <ProfileNotifyBlock business={business} onSave={patch} />
         </div>
       ) : null}
     </div>

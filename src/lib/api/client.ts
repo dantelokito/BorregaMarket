@@ -76,6 +76,20 @@ export async function apiPost<T>(
   return parseResponse<T>(res);
 }
 
+export async function apiPut<T>(
+  url: string,
+  body: unknown,
+  options?: ApiRequestOptions
+): Promise<ApiResult<T>> {
+  const res = await fetch(url, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(body),
+  });
+  return parseResponse<T>(res);
+}
+
 export async function apiPatch<T>(
   url: string,
   body: unknown,

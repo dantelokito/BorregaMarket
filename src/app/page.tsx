@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { HeaderWrapper } from "@/components/layout/HeaderWrapper";
+import { PublicFooter } from "@/components/legal/PublicFooter";
+import { getPublicLegalSettings } from "@/lib/services/legal.service";
 import { ArrowRight, MapPin, Shield, Store } from "lucide-react";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const settings = await getPublicLegalSettings();
   return (
     <div className="min-h-screen">
       <HeaderWrapper />
@@ -45,7 +50,7 @@ export default function HomePage() {
             {
               icon: <MapPin className="text-[var(--brand)]" size={28} />,
               title: "Mapa interactivo",
-              desc: "Visualiza fruterías cercanas con precios en tiempo real",
+              desc: "Visualiza fruterías cercanas y los precios que publica cada una",
             },
             {
               icon: <Store className="text-[var(--brand)]" size={28} />,
@@ -54,8 +59,8 @@ export default function HomePage() {
             },
             {
               icon: <Shield className="text-[var(--brand)]" size={28} />,
-              title: "Seguro y auditado",
-              desc: "Autenticación JWT, roles por perfil y bitácora completa para administradores.",
+              title: "Información clara",
+              desc: "Cada frutería publica sus datos, precios y horarios; tus datos se tratan según nuestro Aviso de Privacidad.",
             },
           ].map((f) => (
             <div key={f.title} className="text-center p-6">
@@ -66,6 +71,7 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+      <PublicFooter settings={settings} />
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { notifyProviderContact } from "@/lib/api/providers";
 import { telHref, whatsappHref } from "@/lib/phone";
 import { CONTACT_TOAST_SUCCESS, notifyContactToast } from "@/lib/ui/contact-toast";
 import { useToast } from "@/components/ui/Toast";
+import { track } from "@/lib/analytics/track";
+import { PrivacyMicrocopy } from "@/components/legal/PrivacyMicrocopy";
 
 export type ContactSource = "call_button" | "whatsapp_button" | "other";
 
@@ -16,6 +18,8 @@ interface ContactCTAProps {
   variant?: "primary" | "link";
   /** When Encargar is the dominant CTA, Llamar becomes secondary */
   emphasis?: "primary" | "secondary";
+  /** `bar`: una línea encima de los botones en la barra móvil. */
+  notice?: "below" | "above";
   className?: string;
 }
 
@@ -25,6 +29,7 @@ export function ContactCTA({
   sticky = false,
   variant = "primary",
   emphasis = "primary",
+  notice = "below",
   className = "",
 }: ContactCTAProps) {
   const { showToast } = useToast();
@@ -45,11 +50,13 @@ export function ContactCTA({
   }
 
   function handleCall(e: React.MouseEvent) {
+    track("contact_click", { providerId, source: "call_button" });
     fireNotify("call_button");
     if (!tel) e.preventDefault();
   }
 
   function handleWhatsApp() {
+    track("contact_click", { providerId, source: "whatsapp_button" });
     fireNotify("whatsapp_button");
   }
 
@@ -91,11 +98,18 @@ export function ContactCTA({
     </a>
   ) : null;
 
+  const privacy = wa ? (
+    <div className={notice === "above" ? "mb-2" : "mt-2"}>
+      <PrivacyMicrocopy variant={notice === "above" || sticky ? "whatsapp-sticky" : "whatsapp"} />
+    </div>
+  ) : null;
+
   if (sticky) {
     return (
       <div
         className={`fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white p-4 lg:hidden ${className}`}
       >
+        {privacy}
         <div className="flex gap-2">
           {primaryBtn}
           {waBtn}
@@ -105,9 +119,13 @@ export function ContactCTA({
   }
 
   return (
-    <div className={`flex flex-wrap gap-2 ${className}`}>
-      {primaryBtn}
-      {waBtn}
+    <div className={className}>
+      {notice === "above" ? privacy : null}
+      <div className="flex flex-wrap gap-2">
+        {primaryBtn}
+        {waBtn}
+      </div>
+      {notice === "below" ? privacy : null}
     </div>
   );
 }
