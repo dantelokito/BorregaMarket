@@ -9,6 +9,7 @@ import {
   updateAdminProvider,
   ProviderNotFoundError,
 } from "@/lib/services/provider.service";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 
 /** Admin: verificar proveedor y/o par de marca (F5). */
 export async function PATCH(
@@ -26,6 +27,7 @@ export async function PATCH(
       adminUserId: session.sub,
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
+    await invalidateProviderCache([id]);
 
     return ok(updated);
   } catch (err) {

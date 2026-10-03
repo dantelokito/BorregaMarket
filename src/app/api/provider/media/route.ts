@@ -8,6 +8,7 @@ import {
   MediaNotFoundError,
   DiskStorageError,
 } from "@/lib/services/media.service";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 
 const MEDIA_FIELDS = new Set(["logo", "cover"]);
 
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
       file,
       ipAddress: ip,
     });
+    await invalidateProviderCache([ctx.provider.id]);
 
     return applyActiveProviderCookie(ok(result), ctx.provider.id);
   } catch (err) {

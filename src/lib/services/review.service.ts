@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 import { buildMeta } from "@/lib/services/pagination";
 import { OrderForbiddenError, OrderNotFoundError } from "@/lib/orders/errors";
 import { formatAuthorName, type CreateReviewInput } from "@/lib/validators/review";
@@ -106,6 +107,7 @@ export async function createReview(params: {
       await recomputeProviderRating(tx, order.providerId);
       return review;
     });
+    await invalidateProviderCache([created.providerId]);
     return serializeReview(created);
   } catch (err) {
     if (
@@ -215,6 +217,7 @@ export async function deleteReviewAsAdmin(params: {
       rating: existing.rating,
     },
   });
+  await invalidateProviderCache([existing.providerId]);
 
   return { id: existing.id, deleted: true };
 }

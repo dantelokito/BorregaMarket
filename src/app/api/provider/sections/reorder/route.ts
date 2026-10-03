@@ -10,6 +10,7 @@ import {
   CatalogForbiddenError,
 } from "@/lib/services/local-product.service";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -21,6 +22,7 @@ export async function PATCH(request: NextRequest) {
       ids: body.ids,
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
+    await invalidateProviderCache([ctx.provider.id]);
     return applyActiveProviderCookie(ok(data), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) {

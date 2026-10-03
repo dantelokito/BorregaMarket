@@ -98,7 +98,7 @@ describe("geo providers routes", () => {
     expect(res.status).toBe(200);
     expect(listProviders).toHaveBeenCalledWith(
       expect.objectContaining({
-        geo: { lat: 25.6714, lng: -100.3089, radiusKm: 10 },
+        geo: { lat: 25.671, lng: -100.309, radiusKm: 10 },
       }),
       expect.any(Object)
     );
@@ -141,7 +141,7 @@ describe("geo providers routes", () => {
       expect(listProviders).toHaveBeenCalledWith(
         expect.objectContaining({
           offersWholesale: true,
-          geo: expect.objectContaining({ lat: 25.6714, lng: -100.3089, radiusKm: 10 }),
+          geo: expect.objectContaining({ lat: 25.671, lng: -100.309, radiusKm: 10 }),
         }),
         expect.any(Object)
       );

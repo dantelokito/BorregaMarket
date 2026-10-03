@@ -12,6 +12,7 @@ import {
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
 import { methodNotAllowedDeleteProduct } from "@/lib/api/method-not-allowed";
 import { OfferValidationError } from "@/lib/catalog/offer";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest) {
       input: body,
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
+    await invalidateProviderCache([ctx.provider.id]);
     return applyActiveProviderCookie(ok(created, 201), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) {

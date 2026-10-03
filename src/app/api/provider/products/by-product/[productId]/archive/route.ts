@@ -6,6 +6,7 @@ import { ok, apiError, fromZodError, handleRouteError } from "@/lib/api/response
 import { archiveProviderOffer } from "@/lib/services/product.service";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
 import { CatalogForbiddenError } from "@/lib/services/local-product.service";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 
 export async function POST(
   request: NextRequest,
@@ -20,6 +21,7 @@ export async function POST(
       productId,
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
+    await invalidateProviderCache([ctx.provider.id]);
     return applyActiveProviderCookie(ok(data), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) return apiError(err.message, err.status);

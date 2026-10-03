@@ -9,6 +9,7 @@ import {
   MediaNotFoundError,
   DiskStorageError,
 } from "@/lib/services/media.service";
+import { invalidateProductProviders } from "@/lib/cache/invalidate-product";
 
 /** ADMIN: upload imagen de producto de catálogo */
 export async function POST(
@@ -37,6 +38,7 @@ export async function POST(
       file,
       ipAddress: ip,
     });
+    await invalidateProductProviders(id);
 
     return ok(result);
   } catch (err) {

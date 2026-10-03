@@ -9,6 +9,7 @@ import {
   MediaForbiddenError,
   DiskStorageError,
 } from "@/lib/services/media.service";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 
 export async function POST(
   request: NextRequest,
@@ -36,6 +37,7 @@ export async function POST(
       file,
       ipAddress: ip,
     });
+    await invalidateProviderCache([ctx.provider.id]);
     return applyActiveProviderCookie(ok(result), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) {

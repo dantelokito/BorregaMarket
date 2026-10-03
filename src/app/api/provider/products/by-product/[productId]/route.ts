@@ -5,6 +5,7 @@ import { applyActiveProviderCookie, requireActiveProvider } from "@/lib/auth/act
 import { ok, apiError, fromZodError, handleRouteError } from "@/lib/api/response";
 import { methodNotAllowedDeleteProduct } from "@/lib/api/method-not-allowed";
 import { patchOfferByProductSchema } from "@/lib/validators/catalog-f10";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 import {
   patchOfferByProduct,
   ProductActivationError,
@@ -54,6 +55,7 @@ export async function PATCH(
       input: body,
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
+    await invalidateProviderCache([ctx.provider.id]);
     return applyActiveProviderCookie(
       ok(result.row, result.created ? 201 : 200),
       ctx.provider.id

@@ -16,6 +16,7 @@ import {
   WrongProductRouteError,
 } from "@/lib/services/local-product.service";
 import { archivedQuerySchema } from "@/lib/validators/catalog-f10";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 import {
   PaginationValidationError,
   parseStrictPagination,
@@ -80,6 +81,7 @@ export async function PATCH(request: NextRequest) {
       request.headers.get("x-forwarded-for") ?? undefined,
       ctx.provider.id
     );
+    await invalidateProviderCache([ctx.provider.id]);
 
     return applyActiveProviderCookie(ok({ providerProduct }), ctx.provider.id);
   } catch (err) {

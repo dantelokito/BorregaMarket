@@ -12,6 +12,7 @@ import {
   ProviderSettingsValidationError,
 } from "@/lib/services/provider.service";
 import { CatalogForbiddenError } from "@/lib/services/local-product.service";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,6 +40,7 @@ export async function PATCH(request: NextRequest) {
       input: body,
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
+    await invalidateProviderCache([ctx.provider.id]);
     const response = ok(data);
     return applyActiveProviderCookie(response, ctx.provider.id);
   } catch (err) {

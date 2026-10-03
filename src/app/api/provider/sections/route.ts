@@ -10,6 +10,7 @@ import {
 } from "@/lib/services/section.service";
 import { CatalogConflictError, CatalogForbiddenError } from "@/lib/services/local-product.service";
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       name: body.name,
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
+    await invalidateProviderCache([ctx.provider.id]);
     return applyActiveProviderCookie(ok(created, 201), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) {

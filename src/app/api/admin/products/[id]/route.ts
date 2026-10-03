@@ -12,6 +12,7 @@ import {
   ProductNotFoundError,
   updateAdminProduct,
 } from "@/lib/services/admin-product.service";
+import { invalidateProductProviders } from "@/lib/cache/invalidate-product";
 
 export async function PATCH(
   request: NextRequest,
@@ -27,6 +28,7 @@ export async function PATCH(
       adminUserId: session.sub,
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
+    await invalidateProductProviders(id);
     return ok(updated);
   } catch (err) {
     if (err instanceof AuthError) {

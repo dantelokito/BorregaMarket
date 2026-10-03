@@ -11,6 +11,16 @@ import {
   listProviders,
   ProviderConflictError,
 } from "@/lib/services/provider.service";
+import {
+  LegalUnavailableError,
+  LegalVersionError,
+} from "@/lib/services/legal.service";
+import {
+  cachedProviderList,
+  invalidateProviderCache,
+  normalizeProviderListQuery,
+  roundCoord,
+} from "@/lib/cache/public-cache";
 
 const CATEGORIES = new Set<string>(Object.values(ProductCategory));
 
@@ -82,22 +92,33 @@ export async function GET(request: NextRequest) {
       radiusKm: searchParams.get("radiusKm"),
     });
 
-    const result = await listProviders(
-      {
-        city: searchParams.get("city"),
-        q: q && q.length >= 2 ? q : null,
-        verified,
-        category: categoryParam
-          ? (categoryParam as "FRUTA" | "VERDURA" | "AGRICOLA")
-          : null,
-        ...(wholesale.value === true ? { offersWholesale: true } : {}),
-        ...(delivery.value === true ? { offersDelivery: true } : {}),
-        geo: geoQuery.geo,
-      },
-      { page, limit, skip }
+    const trimmedQ = q?.trim() ?? "";
+    const filters = {
+      city: searchParams.get("city") || null,
+      q: trimmedQ.length >= 2 ? trimmedQ : null,
+      verified,
+      category: categoryParam
+        ? (categoryParam as "FRUTA" | "VERDURA" | "AGRICOLA")
+        : null,
+      ...(wholesale.value === true ? { offersWholesale: true } : {}),
+      ...(delivery.value === true ? { offersDelivery: true } : {}),
+      geo: geoQuery.geo
+        ? {
+            lat: roundCoord(geoQuery.geo.lat),
+            lng: roundCoord(geoQuery.geo.lng),
+            radiusKm: geoQuery.geo.radiusKm,
+          }
+        : null,
+    };
+
+    const { body, status } = await cachedProviderList(
+      normalizeProviderListQuery({ page, limit, ...filters }),
+      () => listProviders(filters, { page, limit, skip })
     );
 
-    return paginated(result.data, result.meta);
+    const response = paginated(body.data, body.meta);
+    response.headers.set("X-Cache", status);
+    return response;
   } catch (err) {
     if (err instanceof AuthError) {
       return apiError(err.message, err.status);
@@ -117,6 +138,7 @@ export async function POST(request: NextRequest) {
       body,
       request.headers.get("x-forwarded-for") ?? undefined
     );
+    await invalidateProviderCache([provider.id]);
 
     const response = ok(
       {
@@ -130,6 +152,7 @@ export async function POST(request: NextRequest) {
         phone: provider.phone,
         isVerified: provider.isVerified,
         isActive: provider.isActive,
+        whatsappOrderOptIn: provider.whatsappOrderOptIn,
         activeProviderId: provider.id,
       },
       201
@@ -141,6 +164,15 @@ export async function POST(request: NextRequest) {
     }
     if (err instanceof ProviderConflictError) {
       return apiError(err.message, 409);
+    }
+    if (err instanceof LegalVersionError) {
+      return apiError(err.message, 400, err.details);
+    }
+    if (err instanceof LegalUnavailableError) {
+      return apiError("Alta de negocio temporalmente no disponible", 503);
+    }
+    if (err instanceof SyntaxError) {
+      return apiError("Validation failed", 400, [{ field: "body", message: "JSON inválido" }]);
     }
     return handleRouteError(err);
   }

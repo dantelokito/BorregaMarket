@@ -8,6 +8,7 @@ import { patchOfferPrice, ProductActivationError } from "@/lib/services/product.
 import { ProviderNotFoundError } from "@/lib/services/provider.service";
 import { CatalogForbiddenError } from "@/lib/services/local-product.service";
 import { OfferValidationError } from "@/lib/catalog/offer";
+import { invalidateProviderCache } from "@/lib/cache/public-cache";
 
 export async function PATCH(
   request: NextRequest,
@@ -23,6 +24,7 @@ export async function PATCH(
       productId,
       price: body.price,
     });
+    await invalidateProviderCache([ctx.provider.id]);
     return applyActiveProviderCookie(ok(data), ctx.provider.id);
   } catch (err) {
     if (err instanceof AuthError) return apiError(err.message, err.status);
