@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
+    "@serwist/next": "^9.5.12",
     "@upstash/redis": "^1.38.2",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.10.0",
@@ -50,6 +51,7 @@
     "eslint": "^9.22.0",
     "eslint-config-next": "^15.2.4",
     "prisma": "^6.5.0",
+    "serwist": "^9.5.12",
     "tailwindcss": "^4.0.17",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",

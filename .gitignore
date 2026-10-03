@@ -48,3 +48,7 @@ next-env.d.ts
 
 # graphify knowledge graph (AST rebuild: graphify update .)
 /graphify-out/
+
+# Serwist (ADR-043): generado en el build de producción
+/public/sw.js
+/public/swe-worker-*.js

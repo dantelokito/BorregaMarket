@@ -3,6 +3,11 @@ import type { ProviderDetail } from "@/lib/api/types";
 const cache = new Map<string, ProviderDetail>();
 let inflight: { id: string; controller: AbortController } | null = null;
 
+export function clearProviderPreviewCache(): void {
+  cache.clear();
+  abortProviderPreviewFetch();
+}
+
 export function getCachedProviderPreview(id: string): ProviderDetail | undefined {
   return cache.get(id);
 }
