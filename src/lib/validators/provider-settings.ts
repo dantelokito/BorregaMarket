@@ -149,6 +149,7 @@ export const patchProviderSettingsSchema = z
     primaryColor: hexOrNull.optional(),
     secondaryColor: hexOrNull.optional(),
     whatsappEnabled: z.boolean().optional(),
+    whatsappOrderOptIn: z.boolean().optional(),
     acceptsCardAtStore: z.boolean().optional(),
     offersWholesale: z.boolean().optional(),
     offersRetail: z.boolean().optional(),

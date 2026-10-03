@@ -79,6 +79,10 @@ export const notifyOrderCreated = inngest.createFunction(
       await recordOrderNotificationFailure({ orderId, reason: "no_email" });
     }
 
+    if (!order.provider.whatsappOrderOptIn) {
+      return;
+    }
+
     const wa = await sendNewOrderWhatsApp({
       providerPhone: order.provider.phone,
       businessName: order.provider.businessName,

@@ -1,4 +1,11 @@
-import { Prisma, SystemModule, AuditAction, ProductUnit } from "@prisma/client";
+import {
+  Prisma,
+  SystemModule,
+  AuditAction,
+  ProductUnit,
+  ConsentSource,
+  LegalDocumentType,
+} from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { buildMeta } from "@/lib/services/pagination";
@@ -26,6 +33,7 @@ import {
 } from "@/lib/providers/opening-hours";
 import { findOwnedProvider } from "@/lib/providers/owned-provider";
 import { CatalogForbiddenError } from "@/lib/services/local-product.service";
+import { consentRows, resolveConsentDocuments } from "@/lib/services/legal.service";
 
 export class ProviderConflictError extends Error {
   constructor(message = "Ya tienes un negocio registrado") {
@@ -198,17 +206,30 @@ export async function createProvider(
 
   const phone = data.phone ?? user.phone ?? "";
 
-  const provider = await prisma.provider.create({
-    data: {
-      userId,
-      businessName: data.businessName,
-      address: data.address,
-      city: data.city,
-      latitude: data.latitude,
-      longitude: data.longitude,
-      phone,
-      description: data.description,
-    },
+  const [termsDoc] = await resolveConsentDocuments([
+    { type: LegalDocumentType.TERMS, version: data.termsVersion },
+  ]);
+
+  const provider = await prisma.$transaction(async (tx) => {
+    const created = await tx.provider.create({
+      data: {
+        userId,
+        businessName: data.businessName,
+        address: data.address,
+        city: data.city,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        phone,
+        description: data.description,
+        whatsappOrderOptIn: data.whatsappOrderOptIn,
+        whatsappOrderOptInAt: data.whatsappOrderOptIn ? new Date() : null,
+      },
+    });
+    await tx.userConsent.createMany({
+      data: consentRows(userId, [termsDoc], ConsentSource.PROVIDER_ONBOARDING),
+      skipDuplicates: true,
+    });
+    return created;
   });
 
   await writeAuditLog({
@@ -217,7 +238,10 @@ export async function createProvider(
     entityId: provider.id,
     userId,
     ipAddress,
-    details: { businessName: provider.businessName },
+    details: {
+      businessName: provider.businessName,
+      whatsappOrderOptIn: provider.whatsappOrderOptIn,
+    },
   });
 
   return provider;
@@ -550,6 +574,7 @@ function serializeProviderSettings(provider: {
   primaryColor?: string | null;
   secondaryColor?: string | null;
   whatsappEnabled?: boolean;
+  whatsappOrderOptIn?: boolean;
   acceptsCardAtStore?: boolean;
   offersWholesale?: boolean;
   offersRetail?: boolean;
@@ -574,6 +599,7 @@ function serializeProviderSettings(provider: {
     preparationTimeMinutes: provider.preparationTimeMinutes,
     offersDelivery: provider.offersDelivery,
     whatsappEnabled: provider.whatsappEnabled ?? false,
+    whatsappOrderOptIn: provider.whatsappOrderOptIn ?? false,
     acceptsCardAtStore: provider.acceptsCardAtStore ?? false,
     offersWholesale: provider.offersWholesale ?? false,
     offersRetail: provider.offersRetail ?? true,
@@ -586,6 +612,18 @@ function serializeProviderSettings(provider: {
     primaryColor: provider.primaryColor ?? null,
     secondaryColor: provider.secondaryColor ?? null,
   };
+}
+
+/** API-PROV-15-02: la fecha de activación solo se fija al pasar de false a true. */
+export function whatsappOrderOptInData(
+  current: { whatsappOrderOptIn: boolean },
+  next: boolean | undefined,
+  now: Date = new Date()
+): { whatsappOrderOptIn?: boolean; whatsappOrderOptInAt?: Date | null } {
+  if (next === undefined) return {};
+  if (next === false) return { whatsappOrderOptIn: false, whatsappOrderOptInAt: null };
+  if (current.whatsappOrderOptIn) return { whatsappOrderOptIn: true };
+  return { whatsappOrderOptIn: true, whatsappOrderOptInAt: now };
 }
 
 export function toProviderSettings(provider: Parameters<typeof serializeProviderSettings>[0]) {
@@ -670,6 +708,7 @@ export async function updateProviderSettings(params: {
       ...(params.input.whatsappEnabled !== undefined
         ? { whatsappEnabled: params.input.whatsappEnabled }
         : {}),
+      ...whatsappOrderOptInData(provider, params.input.whatsappOrderOptIn),
       ...(params.input.acceptsCardAtStore !== undefined
         ? { acceptsCardAtStore: params.input.acceptsCardAtStore }
         : {}),
@@ -713,6 +752,9 @@ export async function updateProviderSettings(params: {
   if (params.input.description !== undefined) mutatedBusiness.description = updated.description;
   if (params.input.latitude !== undefined) mutatedBusiness.latitude = updated.latitude;
   if (params.input.longitude !== undefined) mutatedBusiness.longitude = updated.longitude;
+  if (params.input.whatsappOrderOptIn !== undefined) {
+    mutatedBusiness.whatsappOrderOptIn = updated.whatsappOrderOptIn;
+  }
 
   await writeAuditLog({
     module: SystemModule.PROVIDERS,

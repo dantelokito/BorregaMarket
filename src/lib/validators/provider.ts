@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { monterreyLatSchema, monterreyLngSchema } from "@/lib/validators/geo";
+import { providerConsentFields } from "@/lib/validators/legal";
 
 export const createProviderSchema = z.object({
   businessName: z.string().min(2, "Nombre del negocio requerido (mínimo 2 caracteres)"),
@@ -9,6 +10,7 @@ export const createProviderSchema = z.object({
   longitude: monterreyLngSchema,
   phone: z.string().optional(),
   description: z.string().optional(),
+  ...providerConsentFields,
 });
 
 export type CreateProviderInput = z.infer<typeof createProviderSchema>;
