@@ -16,6 +16,15 @@ body {
   font-family: "Inter", system-ui, sans-serif;
 }
 
+/* El aviso de cookies no tapa controles del borde inferior (BUG-022). */
+html:has([data-cookie-notice]) {
+  scroll-padding-bottom: calc(var(--cookie-notice-h, 0px) + var(--sticky-cta-h, 0px) + 1rem);
+}
+
+html:has([data-cookie-notice]) :is(a, button, input, select, textarea, label, [role="button"]) {
+  scroll-margin-bottom: calc(var(--cookie-notice-h, 0px) + var(--sticky-cta-h, 0px) + 1rem);
+}
+
 /* Custom scrollbar for filter bar */
 .filter-scroll::-webkit-scrollbar {
   display: none;

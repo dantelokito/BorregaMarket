@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FileText } from "lucide-react";
@@ -25,6 +26,20 @@ const ALL: { slug: LegalSlug; href: string; label: string }[] = [
   { slug: "cookies", href: "/legal/cookies", label: "Política de Cookies" },
 ];
 
+function LegalDocumentLoading() {
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6" aria-busy="true" aria-label="Cargando documento">
+      <div className="h-8 w-2/3 animate-pulse rounded bg-slate-200" />
+      <div className="mt-3 h-4 w-1/2 animate-pulse rounded bg-slate-200" />
+      <div className="mt-8 space-y-3">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div key={index} className="h-4 animate-pulse rounded bg-slate-200" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default async function LegalDocumentPage({
   params,
 }: {
@@ -33,6 +48,17 @@ export default async function LegalDocumentPage({
   const { slug } = await params;
   if (!(slug in TITLES)) notFound();
   const legalSlug = slug as LegalSlug;
+  const type = legalTypeFromSlug(legalSlug);
+  if (!type) notFound();
+
+  return (
+    <Suspense fallback={<LegalDocumentLoading />}>
+      <LegalDocumentBody legalSlug={legalSlug} />
+    </Suspense>
+  );
+}
+
+async function LegalDocumentBody({ legalSlug }: { legalSlug: LegalSlug }) {
   const type = legalTypeFromSlug(legalSlug);
   if (!type) notFound();
 

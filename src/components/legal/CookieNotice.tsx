@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/Toast";
 import { useMeasurement } from "./MeasurementProvider";
@@ -10,8 +10,30 @@ export function CookieNotice() {
   const { showToast } = useToast();
   const [hidden, setHidden] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const open = hydrated && preference === "absent" && !hidden;
 
-  if (!hydrated || preference !== "absent" || hidden) return null;
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (!open) {
+      root.style.removeProperty("--cookie-notice-h");
+      return;
+    }
+    const el = noticeRef.current;
+    if (!el) return;
+    const publish = () => {
+      root.style.setProperty("--cookie-notice-h", `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--cookie-notice-h");
+    };
+  }, [open]);
+
+  if (!open) return null;
 
   function dismiss(next: "on" | "off") {
     const reduce =
@@ -32,6 +54,8 @@ export function CookieNotice() {
 
   return (
     <div
+      ref={noticeRef}
+      data-cookie-notice
       role="region"
       aria-label="Aviso de cookies y medición"
       className={`no-print fixed z-50 rounded-xl border border-gray-200 bg-white p-4 shadow-lg inset-x-3 bottom-[calc(var(--sticky-cta-h,0px)+0.75rem)] sm:inset-x-auto sm:right-4 sm:max-w-md ${
