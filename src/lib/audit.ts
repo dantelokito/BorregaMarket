@@ -10,8 +10,13 @@ interface AuditEntry {
   ipAddress?: string;
 }
 
-export async function writeAuditLog(entry: AuditEntry): Promise<string> {
-  const created = await prisma.auditLog.create({
+type AuditClient = Pick<Prisma.TransactionClient, "auditLog">;
+
+export async function writeAuditLog(
+  entry: AuditEntry,
+  client: AuditClient = prisma
+): Promise<string> {
+  const created = await client.auditLog.create({
     data: {
       module: entry.module,
       action: entry.action,

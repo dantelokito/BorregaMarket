@@ -1,6 +1,12 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { UserRole, SystemModule, AuditAction } from "@prisma/client";
+import {
+  UserRole,
+  SystemModule,
+  AuditAction,
+  ConsentSource,
+  LegalDocumentType,
+} from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth/password";
 import { signToken } from "@/lib/auth/token";
@@ -13,6 +19,13 @@ import {
   checkAuthRateLimit,
   clientIp,
 } from "@/lib/rate-limit/auth";
+import { registerConsentFields } from "@/lib/validators/legal";
+import {
+  consentRows,
+  LegalUnavailableError,
+  LegalVersionError,
+  resolveConsentDocuments,
+} from "@/lib/services/legal.service";
 
 const registerSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -20,6 +33,7 @@ const registerSchema = z.object({
   name: z.string().min(2, "Nombre requerido"),
   phone: z.string().optional(),
   role: z.enum([UserRole.CLIENT, UserRole.PROVIDER]).default(UserRole.CLIENT),
+  ...registerConsentFields,
 });
 
 export async function POST(request: NextRequest) {
@@ -32,20 +46,31 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = registerSchema.parse(body);
 
+    const consentDocs = await resolveConsentDocuments([
+      { type: LegalDocumentType.TERMS, version: data.termsVersion },
+      { type: LegalDocumentType.PRIVACY, version: data.privacyVersion },
+    ]);
+
     const exists = await prisma.user.findUnique({ where: { email: data.email } });
     if (exists) {
       return apiError("El email ya está registrado", 409);
     }
 
     const passwordHash = await hashPassword(data.password);
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        passwordHash,
-        name: data.name,
-        phone: data.phone,
-        role: data.role,
-      },
+    const user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          email: data.email,
+          passwordHash,
+          name: data.name,
+          phone: data.phone,
+          role: data.role,
+        },
+      });
+      await tx.userConsent.createMany({
+        data: consentRows(created.id, consentDocs, ConsentSource.REGISTER),
+      });
+      return created;
     });
 
     await writeAuditLog({
@@ -77,6 +102,12 @@ export async function POST(request: NextRequest) {
     }
     if (err instanceof AuthRedisUnavailableError) {
       return apiError(err.message, 503);
+    }
+    if (err instanceof LegalUnavailableError) {
+      return apiError(err.message, 503);
+    }
+    if (err instanceof LegalVersionError) {
+      return apiError(err.message, 400, err.details);
     }
     if (err instanceof z.ZodError) {
       const details = fromZodError(err);

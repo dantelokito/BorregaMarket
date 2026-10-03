@@ -14,6 +14,7 @@ export const SystemModule = {
   PERMISSIONS: "PERMISSIONS",
   AUTH: "AUTH",
   AUDIT: "AUDIT",
+  LEGAL: "LEGAL",
 } as const;
 
 export type SystemModule = (typeof SystemModule)[keyof typeof SystemModule];
