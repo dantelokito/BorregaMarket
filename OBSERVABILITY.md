@@ -1,7 +1,7 @@
 # Observabilidad — LaBorregaMarket
 
-> **Versión:** 0.14.0  
-> **Fecha:** 18/09/2026  
+> **Versión:** 0.15.0  
+> **Fecha:** 07/10/2026  
 > **Producto:** LaBorregaMarket (repo BorregaMarket)
 
 ## Runtime
@@ -21,6 +21,14 @@
 
 F14 no añade env Must. Inventario sigue Decimal (`on_hand`). Merma/ajuste aditivos: `InventoryEntry.kind` (`ENTRADA` / `MERMA` / `AJUSTE`). Media: `UPLOADS_DIR` (disco). Cloudinary no es Must.
 
+## Analítica y caché (F15)
+
+| Ítem | Valor |
+|------|--------|
+| Umami | `NEXT_PUBLIC_UMAMI_WEBSITE_ID`, `NEXT_PUBLIC_UMAMI_SRC` (vacías: no se carga el script) |
+| Caché pública | Redis fail-open en `GET /api/providers*`; `PUBLIC_CACHE_DISABLED=1` la apaga |
+| Estáticos | Serwist genera `/public/sw.js` en el build; no se versiona |
+
 ## Logs y jobs
 
 - Email / Inngest: degradación si faltan keys (ver `.env.example`).
@@ -37,3 +45,4 @@ F14 no añade env Must. Inventario sigue Decimal (`on_hand`). Merma/ajuste aditi
 | 0.12.0 | Inventario blando Decimal por sucursal |
 | 0.13.0 | Archivo de oferta, unidad, entradas, historial de precio |
 | 0.14.0 | Panel PROVIDER: Perfil, merma aditiva, series SVG, PDF from/to |
+| 0.15.0 | Legal, Umami sin cookies, caché pública fail-open y Serwist |

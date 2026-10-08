@@ -1,8 +1,8 @@
 # LaBorregaMarket — Product Overview
 
-> **Versión del producto:** 0.14.0  
-> **Última actualización:** 18/09/2026  
-> **Estado:** Pre-lanzamiento — mejoras panel PROVIDER (Perfil, merma aditiva, series, PDF from/to)  
+> **Versión del producto:** 0.15.0  
+> **Última actualización:** 07/10/2026  
+> **Estado:** Pre-lanzamiento — blindaje legal, analítica y caché (textos legales del seed en borrador)  
 > **Licencia:** [MIT](./LICENSE)
 
 ---
@@ -297,9 +297,16 @@ Cada proveedor tiene entradas `ProviderProduct` con variación de precio (~±10%
 - [x] Reportes: series unificadas SVG, productos, bySource; PDF `from`/`to` (N=1 403)
 - [x] SubNav: Perfil siempre último
 
-### Posterior — Canales y monetización (Won't actual / no es F14)
+### Fase 15 — Blindaje legal, analítica y caché (v0.15.0)
 
-Este bloque **no** es la Fase 14 de producto. Queda fuera del Must actual (Won't):
+- [x] Documentos legales públicos, consentimiento en registro, re-aceptación y opt-in de WhatsApp en pedidos
+- [x] Medición sin cookies (Umami) y aviso de preferencias
+- [x] Caché pública fail-open en `GET /api/providers` y estáticos con Serwist
+- [x] Textos del seed legal: borrador; no son producción hasta revisión de un abogado mexicano
+
+### Posterior — Canales y monetización (Won't actual / no es F15)
+
+Este bloque **no** es la Fase 15 de producto. Queda fuera del Must actual (Won't):
 
 - [ ] PWA / app móvil
 - [ ] Pagos en línea (pasarela)
@@ -346,7 +353,7 @@ LaBorregaMarket es un proyecto público con licencia MIT.
 | Reportar vulnerabilidades | `SECURITY.md` |
 | Esquema como contrato | `prisma/schema.prisma` |
 | Seed reproducible (solo local) | `prisma/seed.ts` |
-| Versionado | `0.14.0`; pagos y PWA siguen como Won't posterior (no F14) |
+| Versionado | `0.15.0`; textos legales del seed en borrador hasta revisión de un abogado mexicano; pagos siguen como Won't |
 
 ---
 

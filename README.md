@@ -2,7 +2,7 @@
 
 Marketplace open source para **fruterías, verdulerías y productores agrícolas** en México. El objetivo es que un cliente encuentre negocio fresco cerca, compare y contacte o pida directo al proveedor — sin intermediarios.
 
-**Versión:** 0.14.0 · Licencia [MIT](./LICENSE)
+**Versión:** 0.15.0 · Licencia [MIT](./LICENSE)
 
 ## Qué puedes hacer
 
