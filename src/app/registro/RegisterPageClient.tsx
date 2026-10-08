@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { register } from "@/lib/api/auth";
 import { getLegalCurrent } from "@/lib/api/legal";
 import { ApiError } from "@/lib/api/client";
@@ -18,7 +18,6 @@ const CONSENT_RETRY =
   "No pudimos registrar tu aceptación. Recarga la página e intenta de nuevo.";
 
 function RegisterForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const defaultRole = searchParams.get("role") === "provider" ? "PROVIDER" : "CLIENT";
 
@@ -65,7 +64,21 @@ function RegisterForm() {
       return;
     }
     setConsentError("");
-    if (!termsVersion || !privacyVersion) {
+    let terms = termsVersion;
+    let privacy = privacyVersion;
+    if (!terms || !privacy) {
+      try {
+        const { data } = await getLegalCurrent();
+        terms = data.documents.find((doc) => doc.type === "TERMS")?.version ?? null;
+        privacy = data.documents.find((doc) => doc.type === "PRIVACY")?.version ?? null;
+        setTermsVersion(terms);
+        setPrivacyVersion(privacy);
+      } catch {
+        terms = null;
+        privacy = null;
+      }
+    }
+    if (!terms || !privacy) {
       setError(CONSENT_RETRY);
       return;
     }
@@ -75,16 +88,14 @@ function RegisterForm() {
       await register({
         ...form,
         acceptLegal: true,
-        termsVersion,
-        privacyVersion,
+        termsVersion: terms,
+        privacyVersion: privacy,
       });
       track("register_success", { source: form.role });
-      if (form.role === "PROVIDER") {
-        router.push("/registro/negocio");
-      } else {
-        router.push("/explorar");
-      }
-      router.refresh();
+      // Igual que el login: navegación dura para que la cookie de sesión viaje.
+      // router.push + refresh dejaba la URL en /registro.
+      window.location.assign(form.role === "PROVIDER" ? "/registro/negocio" : "/explorar");
+      return;
     } catch (err) {
       if (err instanceof ApiError && err.status === 400) {
         const consentField = err.details?.some((detail) =>
